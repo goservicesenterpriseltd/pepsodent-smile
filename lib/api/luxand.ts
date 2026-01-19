@@ -27,7 +27,20 @@ export async function uploadImageToLuxand(imageFile: File): Promise<LuxandEmotio
         statusText: response.statusText,
         body: errorText,
       });
-      throw new Error(`API request failed: ${response.status} ${response.statusText}. ${errorText}`);
+      
+      // Provide user-friendly error messages based on status
+      let userMessage = 'Failed to analyze your smile. Please try again.';
+      if (response.status === 401 || response.status === 403) {
+        userMessage = 'Authentication failed. Please check API configuration.';
+      } else if (response.status === 429) {
+        userMessage = 'Too many requests. Please wait a moment and try again.';
+      } else if (response.status >= 500) {
+        userMessage = 'Server error. Please try again later.';
+      } else if (response.status === 400) {
+        userMessage = 'Invalid image. Please capture a new photo.';
+      }
+      
+      throw new Error(userMessage);
     }
 
     const data: LuxandEmotionResponse = await response.json();
@@ -49,7 +62,7 @@ export async function uploadImageToLuxand(imageFile: File): Promise<LuxandEmotio
       // Re-throw with more context
       throw error;
     }
-    throw new Error('Failed to communicate with Luxand API. Please check your internet connection.');
+    throw new Error('Network error. Please check your internet connection and try again.');
   }
 }
 

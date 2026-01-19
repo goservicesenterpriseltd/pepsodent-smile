@@ -1,14 +1,15 @@
 'use client';
 
-import { useEffect } from 'react';
-import { observer } from 'mobx-react-lite';
 import { CameraPreview } from '@/components/camera/CameraPreview';
-import { userStore } from '@/stores/UserStore';
 import { cameraStore } from '@/stores/CameraStore';
-import { luxandAPIStore } from '@/stores/LuxandAPIStore';
-import { uiStore } from '@/stores/UIStore';
-import { optimizeImageForUpload } from '@/lib/image/image-capture';
 import { fileToBase64 } from '@/lib/image/image-storage';
+import { luxandAPIStore } from '@/stores/LuxandAPIStore';
+import { observer } from 'mobx-react-lite';
+import { optimizeImageForUpload } from '@/lib/image/image-capture';
+import { toastStore } from '@/stores/ToastStore';
+import { uiStore } from '@/stores/UIStore';
+import { useEffect } from 'react';
+import { userStore } from '@/stores/UserStore';
 
 export default observer(function CapturePage() {
   // Redirect to personalize if user data is incomplete
@@ -30,28 +31,37 @@ export default observer(function CapturePage() {
     try {
       // Validate file before processing
       if (!file || file.size === 0) {
-        uiStore.setError('Invalid image captured. Please try again.');
+        toastStore.error('Invalid image captured. Please try again.');
         return;
       }
 
       // Store the original image as base64 for leaderboard (before optimization)
+      // This ensures we have the full quality image for leaderboard display
       const imageData = await fileToBase64(file);
       cameraStore.setImageData(imageData);
       
       // Store in camera store for preview
       cameraStore.setCapturedImage(file, URL.createObjectURL(file));
       
-      // Optimize image for API upload
+      // Optimize image for API upload (smaller size, faster upload)
       const optimizedFile = await optimizeImageForUpload(file);
       
       // Navigate to processing
       uiStore.navigateTo('processing');
       
-      // Analyze image
+      // Analyze image - only proceed if API call succeeds
       await luxandAPIStore.analyzeImage(optimizedFile);
       
-      // Navigate to results (camera will be stopped in results page useEffect)
-      uiStore.navigateTo('results');
+      // Only navigate to results if API returned a valid score
+      // This ensures we only count attempts with successful API responses
+      if (luxandAPIStore.hasValidScore && luxandAPIStore.smileScore) {
+        // Navigate to results (camera will be stopped in results page useEffect)
+        uiStore.navigateTo('results');
+      } else {
+        // If no valid score, show error and stay on capture page
+        toastStore.error('Failed to get a valid score. Please try again.');
+        uiStore.navigateTo('capture');
+      }
     } catch (error) {
       console.error('Error processing image:', error);
       
@@ -59,13 +69,12 @@ export default observer(function CapturePage() {
       const errorMessage = luxandAPIStore.error || 
         (error instanceof Error ? error.message : 'Failed to process your smile. Please try again.');
       
-      uiStore.setError(errorMessage);
+      // Show error in toast
+      toastStore.error(errorMessage);
       uiStore.navigateTo('capture');
       
-      // Reset the API store error after displaying
-      setTimeout(() => {
-        luxandAPIStore.error = null;
-      }, 5000);
+      // Reset the API store error
+      luxandAPIStore.error = null;
     }
   };
 
@@ -88,19 +97,13 @@ export default observer(function CapturePage() {
             <p className="text-white/90 text-sm">
               💡 <strong>Tips:</strong> Make sure your face is clearly visible, well-lit, and centered in the frame
             </p>
+            <p className="text-white/90 text-sm mt-2">
+              😁 Show your teeth for the best smile score
+            </p>
           </div>
         </div>
 
         <CameraPreview onCapture={handleCapture} />
-
-        {uiStore.error && (
-          <div className="bg-[#e60012]/20 border-2 border-[#e60012] text-white p-4 rounded-lg text-center space-y-2">
-            <p className="font-semibold">{uiStore.error}</p>
-            <p className="text-sm text-white/80">
-              Please make sure your face is clearly visible and try again.
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );

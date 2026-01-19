@@ -2,6 +2,8 @@ import { makeAutoObservable } from 'mobx';
 import type { LuxandEmotionResponse, SmileScoreResult } from '@/types/luxand-api';
 import { uploadImageToLuxand } from '@/lib/api/luxand';
 import { calculateSmileScore } from '@/lib/api/luxand';
+import { appConfig } from '@/lib/config/app-config';
+import { toastStore } from './ToastStore';
 
 class LuxandAPIStore {
   apiResponse: LuxandEmotionResponse | null = null;
@@ -25,7 +27,15 @@ class LuxandAPIStore {
 
       const response = await uploadImageToLuxand(imageFile);
       this.apiResponse = response;
-      this.smileScore = calculateSmileScore(response);
+      const rawScore = calculateSmileScore(response);
+      if (rawScore) {
+        this.smileScore = {
+          ...rawScore,
+          score: Math.max(appConfig.minScore, rawScore.score),
+        };
+      } else {
+        this.smileScore = null;
+      }
       
       if (!this.smileScore) {
         // Provide more helpful error message
@@ -43,6 +53,10 @@ class LuxandAPIStore {
       
       this.error = errorMessage;
       console.error('Error analyzing image:', error);
+      
+      // Show error in toast
+      toastStore.error(errorMessage);
+      
       throw error;
     } finally {
       this.isLoading = false;

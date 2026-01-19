@@ -1,6 +1,7 @@
-import * as blazeface from '@tensorflow-models/blazeface';
 import '@tensorflow/tfjs-core';
 import '@tensorflow/tfjs-backend-webgl';
+
+import * as blazeface from '@tensorflow-models/blazeface';
 
 export interface FacePosition {
   x: number;

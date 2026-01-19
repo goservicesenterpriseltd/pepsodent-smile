@@ -1,7 +1,11 @@
 import { makeAutoObservable, runInAction } from 'mobx';
 import type { SmileAttempt, LeaderboardEntry } from '@/types/leaderboard';
+import type { UserData } from '@/types/user';
 import { saveAttempt, getAllAttempts } from '@/lib/persistence/indexeddb';
 import { aggregateLeaderboard } from '@/lib/leaderboard/aggregation';
+import { getAttemptsForIdentity } from '@/lib/leaderboard/identity';
+import { appConfig } from '@/lib/config/app-config';
+import { toastStore } from './ToastStore';
 import { 
   fetchLeaderboardFromAPI, 
   submitAttemptToAPI, 
@@ -23,33 +27,58 @@ class LeaderboardStore {
 
   async addAttempt(attempt: SmileAttempt) {
     try {
+      const existingAttempts = await getAllAttempts();
+      const userAttempts = getAttemptsForIdentity(existingAttempts, attempt);
+      if (userAttempts.length >= appConfig.maxAttempts) {
+        this.error = 'Maximum attempts reached';
+        toastStore.warning('You have reached the maximum number of attempts. Your best score will be used!');
+        return false;
+      }
+
       // Save to local storage first
       await saveAttempt(attempt);
       
-      // Try to sync to backend API if available
+      // Immediately update local attempts array so count is accurate
+      const updatedAttempts = await getAllAttempts();
+      runInAction(() => {
+        this.attempts = updatedAttempts;
+        this.updateLeaderboard();
+      });
+      
+      // Try to sync to backend API if available (async, don't wait)
       if (isBackendAPIAvailable()) {
-        try {
-          await submitAttemptToAPI({
-            email: attempt.email,
-            firstName: attempt.firstName,
-            lastName: attempt.lastName,
-            phone: attempt.phone,
-            gender: attempt.gender,
-            score: attempt.score,
-            timestamp: attempt.timestamp,
-          });
+        // Don't await - sync in background
+        submitAttemptToAPI({
+          email: attempt.email,
+          firstName: attempt.firstName,
+          lastName: attempt.lastName,
+          phone: attempt.phone,
+          gender: attempt.gender,
+          score: attempt.score,
+          timestamp: attempt.timestamp,
+        }).then(() => {
           console.log('Attempt synced to backend API');
-        } catch (apiError) {
+        }).catch((apiError) => {
           console.warn('Failed to sync attempt to backend, keeping local only:', apiError);
-          // Continue with local storage even if API fails
-        }
+          const errorMsg = apiError instanceof Error ? apiError.message : 'Failed to sync to server';
+          toastStore.warning(`Score saved locally. ${errorMsg}`);
+        });
       }
       
-      await this.loadFromStorage();
-      this.updateLeaderboard();
+      // Reload from storage to ensure consistency (but don't wait for API sync)
+      // This ensures local attempts are always up to date
+      const finalAttempts = await getAllAttempts();
+      runInAction(() => {
+        this.attempts = finalAttempts;
+        this.updateLeaderboard();
+      });
+      
+      return true;
     } catch (error) {
       this.error = error instanceof Error ? error.message : 'Failed to save attempt';
       console.error('Error adding attempt:', error);
+      toastStore.error(this.error);
+      return false;
     }
   }
 
@@ -63,13 +92,26 @@ class LeaderboardStore {
         try {
           const apiLeaderboard = await fetchLeaderboardFromAPI();
           runInAction(() => {
-            // Use API data directly (it's already aggregated)
-            this.leaderboard = apiLeaderboard;
+            // Normalize API data to be sorted and ranked by best score
+            const sorted = [...apiLeaderboard].sort((a, b) => {
+              const scoreA = Number.isFinite(a.highestScore) ? a.highestScore : a.totalScore;
+              const scoreB = Number.isFinite(b.highestScore) ? b.highestScore : b.totalScore;
+              if (scoreB !== scoreA) {
+                return scoreB - scoreA;
+              }
+              return b.lastPlayed - a.lastPlayed;
+            });
+            this.leaderboard = sorted.map((entry, index) => ({
+              ...entry,
+              rank: index + 1,
+            }));
             this.lastSyncTime = Date.now();
           });
           return; // Successfully loaded from API
         } catch (apiError) {
           console.warn('Failed to load from backend API, falling back to local storage:', apiError);
+          const errorMsg = apiError instanceof Error ? apiError.message : 'Failed to load from server';
+          toastStore.warning(`Using local scores. ${errorMsg}`);
           // Fall through to local storage
         }
       }
@@ -84,6 +126,7 @@ class LeaderboardStore {
     } catch (error) {
       this.error = error instanceof Error ? error.message : 'Failed to load leaderboard';
       console.error('Error loading leaderboard:', error);
+      toastStore.error(this.error);
     } finally {
       runInAction(() => {
         this.isLoading = false;
@@ -100,10 +143,26 @@ class LeaderboardStore {
     return entry?.rank || 0;
   }
 
-  getUserHistory(email: string): SmileAttempt[] {
-    return this.attempts
-      .filter(a => a.email === email)
-      .sort((a, b) => b.timestamp - a.timestamp);
+  getUserHistory(identity: UserData): SmileAttempt[] {
+    return getAttemptsForIdentity(this.attempts, identity).sort(
+      (a, b) => b.timestamp - a.timestamp
+    );
+  }
+
+  getAttemptCount(identity: UserData): number {
+    // Use current attempts from store, but if empty, try to get from storage
+    // This ensures we have the latest data after an attempt is saved
+    if (this.attempts.length === 0) {
+      // If attempts array is empty, the count is 0
+      return 0;
+    }
+    return getAttemptsForIdentity(this.attempts, identity).length;
+  }
+
+  async getAttemptCountAsync(identity: UserData): Promise<number> {
+    // Always get fresh data from storage to ensure accuracy
+    const attempts = await getAllAttempts();
+    return getAttemptsForIdentity(attempts, identity).length;
   }
 
   getTopN(n: number): LeaderboardEntry[] {

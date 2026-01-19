@@ -1,24 +1,15 @@
 import type { SmileAttempt, LeaderboardEntry } from '@/types/leaderboard';
+import { groupAttemptsByIdentity } from '@/lib/leaderboard/identity';
 
 export function aggregateLeaderboard(attempts: SmileAttempt[]): LeaderboardEntry[] {
   if (attempts.length === 0) {
     return [];
   }
 
-  // Group by email
-  const userMap = new Map<string, SmileAttempt[]>();
-
-  attempts.forEach(attempt => {
-    if (!userMap.has(attempt.email)) {
-      userMap.set(attempt.email, []);
-    }
-    userMap.get(attempt.email)!.push(attempt);
-  });
-
-  // Aggregate per user
+  const identityGroups = groupAttemptsByIdentity(attempts);
   const entries: LeaderboardEntry[] = [];
 
-  userMap.forEach((userAttempts, email) => {
+  identityGroups.forEach(userAttempts => {
     const totalScore = userAttempts.reduce((sum, a) => sum + a.score, 0);
     const attemptCount = userAttempts.length;
     const averageScore = totalScore / attemptCount;
@@ -29,10 +20,10 @@ export function aggregateLeaderboard(attempts: SmileAttempt[]): LeaderboardEntry
     const latestAttempt = userAttempts.sort((a, b) => b.timestamp - a.timestamp)[0];
 
     entries.push({
-      email,
+      email: latestAttempt.email,
       firstName: latestAttempt.firstName,
       lastName: latestAttempt.lastName,
-      totalScore,
+      totalScore: highestScore,
       attemptCount,
       averageScore,
       highestScore,
@@ -42,14 +33,12 @@ export function aggregateLeaderboard(attempts: SmileAttempt[]): LeaderboardEntry
     });
   });
 
-  // Sort by totalScore descending
+  // Sort by highest score descending
   entries.sort((a, b) => {
-    if (b.totalScore !== a.totalScore) {
-      return b.totalScore - a.totalScore;
-    }
-    // If tied, use highest score
-    if (b.highestScore !== a.highestScore) {
-      return b.highestScore - a.highestScore;
+    const scoreA = Number.isFinite(a.highestScore) ? a.highestScore : a.totalScore;
+    const scoreB = Number.isFinite(b.highestScore) ? b.highestScore : b.totalScore;
+    if (scoreB !== scoreA) {
+      return scoreB - scoreA;
     }
     // If still tied, use most recent
     return b.lastPlayed - a.lastPlayed;

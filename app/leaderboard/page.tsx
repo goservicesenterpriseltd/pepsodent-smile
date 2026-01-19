@@ -7,9 +7,9 @@ import { leaderboardStore } from '@/stores/LeaderboardStore';
 import { userStore } from '@/stores/UserStore';
 import Link from 'next/link';
 import { base64ToDataUrl } from '@/lib/image/image-storage';
+import { appConfig } from '@/lib/config/app-config';
 
-// Refresh interval in milliseconds (default: 5 seconds)
-const REFRESH_INTERVAL = parseInt(process.env.NEXT_PUBLIC_LEADERBOARD_REFRESH_INTERVAL || '5000', 10);
+const REFRESH_INTERVAL = appConfig.leaderboardRefreshIntervalMs;
 
 export default observer(function LeaderboardPage() {
   const [autoScroll, setAutoScroll] = useState(true);
@@ -158,6 +158,10 @@ export default observer(function LeaderboardPage() {
               const isCurrentUser = entry.email === currentUserEmail;
               const imageUrl = entry.imageData ? base64ToDataUrl(entry.imageData) : null;
 
+              const displayScore = Number.isFinite(entry.highestScore)
+                ? entry.highestScore
+                : entry.totalScore;
+
               return (
                 <div
                   key={entry.email}
@@ -203,9 +207,9 @@ export default observer(function LeaderboardPage() {
                   {/* Score */}
                   <div className="text-right flex-shrink-0">
                     <div className="text-2xl font-bold text-[#e60012]">
-                      {Math.round(entry.totalScore)}
+                      {Math.round(displayScore)}
                     </div>
-                    <div className="text-xs text-gray-500">points</div>
+                    <div className="text-xs text-gray-500">score</div>
                   </div>
                 </div>
               );
