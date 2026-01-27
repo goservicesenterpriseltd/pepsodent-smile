@@ -1,12 +1,43 @@
 /**
  * Get the base URL for share links
+ * In dev mode, uses IP address from NEXT_PUBLIC_DEV_URL or detects from window.location
+ * In production, uses the remote URL from NEXT_PUBLIC_BASE_URL
  */
 export function getShareBaseUrl(): string {
   if (typeof window !== 'undefined') {
-    return window.location.origin;
+    const hostname = window.location.hostname;
+    const port = window.location.port;
+    const protocol = window.location.protocol;
+    
+    // Check if we're in development mode
+    const isDev = process.env.NODE_ENV === 'development' || hostname === 'localhost' || hostname === '127.0.0.1';
+    
+    if (isDev) {
+      // In dev, check for explicit dev URL first (user can set this with their IP)
+      const devUrl = process.env.NEXT_PUBLIC_DEV_URL;
+      if (devUrl) {
+        return devUrl;
+      }
+      
+      // If hostname is already an IP address, use it
+      if (hostname.match(/^\d+\.\d+\.\d+\.\d+$/)) {
+        return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
+      }
+      
+      // Otherwise, use localhost (user should set NEXT_PUBLIC_DEV_URL with their IP for sharing)
+      return `${protocol}//${hostname}${port ? `:${port}` : ''}`;
+    } else {
+      // Production: use remote URL
+      return process.env.NEXT_PUBLIC_BASE_URL || 'https://www.pepsometer.fun';
+    }
   }
+  
   // Fallback for SSR
-  return process.env.NEXT_PUBLIC_BASE_URL || 'https://pepsodent-smile.vercel.app';
+  const isDev = process.env.NODE_ENV === 'development';
+  if (isDev) {
+    return process.env.NEXT_PUBLIC_DEV_URL || 'http://localhost:3000';
+  }
+  return process.env.NEXT_PUBLIC_BASE_URL || 'https://www.pepsometer.fun';
 }
 
 /**

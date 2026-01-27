@@ -10,6 +10,71 @@ import type { SmileAttempt } from '@/types/leaderboard';
 import type { LuxandFaceRegion } from '@/types/luxand-api';
 import { Button } from '@/components/ui/Button';
 
+// Helper function to ensure explicit RGB color values for html2canvas compatibility
+// html2canvas has issues with oklab/oklch colors, so we set explicit RGB values from computed styles
+const prepareElementForCanvas = (element: HTMLElement) => {
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_ELEMENT,
+    null
+  );
+
+  const elements: HTMLElement[] = [element];
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    if (node instanceof HTMLElement) {
+      elements.push(node);
+    }
+    node = walker.nextNode();
+  }
+
+  const originalStyles: Map<HTMLElement, { [key: string]: string }> = new Map();
+
+  elements.forEach((el) => {
+    const computedStyle = window.getComputedStyle(el);
+    const styleToRestore: { [key: string]: string } = {};
+
+    // Set explicit RGB values for color properties to help html2canvas
+    const colorProperties = [
+      'color',
+      'backgroundColor',
+      'borderColor',
+      'borderTopColor',
+      'borderRightColor',
+      'borderBottomColor',
+      'borderLeftColor',
+    ];
+
+    colorProperties.forEach((prop) => {
+      const computedValue = computedStyle.getPropertyValue(prop);
+      // Only set if we have a valid color value (not transparent/initial)
+      if (computedValue && computedValue !== 'transparent' && computedValue !== 'rgba(0, 0, 0, 0)') {
+        const currentStyle = el.style.getPropertyValue(prop);
+        styleToRestore[prop] = currentStyle;
+        // Set the computed RGB value explicitly
+        el.style.setProperty(prop, computedValue, 'important');
+      }
+    });
+
+    if (Object.keys(styleToRestore).length > 0) {
+      originalStyles.set(el, styleToRestore);
+    }
+  });
+
+  return () => {
+    // Restore original styles
+    originalStyles.forEach((styles, el) => {
+      Object.entries(styles).forEach(([prop, value]) => {
+        if (value) {
+          el.style.setProperty(prop, value);
+        } else {
+          el.style.removeProperty(prop);
+        }
+      });
+    });
+  };
+};
+
 export default function SharePage() {
   const params = useParams();
   const attemptId = params?.id as string;
@@ -27,11 +92,35 @@ export default function SharePage() {
       }
 
       try {
-        const loadedAttempt = await getAttemptById(attemptId);
-        if (loadedAttempt) {
-          setAttempt(loadedAttempt);
+        // First, try to fetch from API (works across devices)
+        try {
+          const response = await fetch(`/api/attempts/${attemptId}`, {
+            method: 'GET',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            cache: 'no-store',
+          });
+
+          if (response.ok) {
+            const apiAttempt = await response.json();
+            // Transform API response to SmileAttempt format if needed
+            if (apiAttempt) {
+              setAttempt(apiAttempt as SmileAttempt);
+              setIsLoading(false);
+              return;
+            }
+          }
+        } catch (apiError) {
+          console.warn('Failed to fetch from API, trying IndexedDB:', apiError);
+        }
+
+        // Fallback to IndexedDB (only works on same device/browser)
+        const localAttempt = await getAttemptById(attemptId);
+        if (localAttempt) {
+          setAttempt(localAttempt);
         } else {
-          console.error('Attempt not found:', attemptId);
+          console.error('Attempt not found in API or IndexedDB:', attemptId);
         }
       } catch (error) {
         console.error('Error loading attempt:', error);
@@ -58,12 +147,42 @@ export default function SharePage() {
     if (!shareCardRef.current || !attempt) return;
 
     setIsGenerating(true);
+    let restoreStyles: (() => void) | null = null;
+    
     try {
-      const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#001122',
+      // Find the actual card element
+      const cardElement = shareCardRef.current.querySelector('div > div') as HTMLElement;
+      const targetElement = cardElement || shareCardRef.current;
+      
+      // Wait for all images to load
+      const images = targetElement.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve();
+              } else {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+              }
+            })
+        )
+      );
+      
+      // Small delay to ensure rendering is complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      
+      // Ensure explicit RGB color values for html2canvas compatibility
+      restoreStyles = prepareElementForCanvas(targetElement);
+      
+      const canvas = await html2canvas(targetElement, {
+        backgroundColor: null,
         scale: 2,
         logging: false,
         useCORS: true,
+        allowTaint: true,
+        imageTimeout: 15000,
       });
 
       canvas.toBlob(async (blob) => {
@@ -79,8 +198,16 @@ export default function SharePage() {
         }
       }, 'image/png');
     } catch (error) {
-      console.error('Error sharing:', error);
+      // Suppress oklab parsing errors - they're non-critical
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!errorMessage.includes('oklab') && !errorMessage.includes('oklch')) {
+        console.error('Error sharing:', error);
+      }
     } finally {
+      // Restore original styles
+      if (restoreStyles) {
+        restoreStyles();
+      }
       setIsGenerating(false);
     }
   };
@@ -89,12 +216,42 @@ export default function SharePage() {
     if (!shareCardRef.current || !attempt) return;
 
     setIsGenerating(true);
+    let restoreStyles: (() => void) | null = null;
+    
     try {
-      const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#001122',
+      // Find the actual card element
+      const cardElement = shareCardRef.current.querySelector('div > div') as HTMLElement;
+      const targetElement = cardElement || shareCardRef.current;
+      
+      // Wait for all images to load
+      const images = targetElement.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve();
+              } else {
+                img.onload = () => resolve();
+                img.onerror = () => resolve();
+              }
+            })
+        )
+      );
+      
+      // Small delay to ensure rendering is complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      
+      // Ensure explicit RGB color values for html2canvas compatibility
+      restoreStyles = prepareElementForCanvas(targetElement);
+      
+      const canvas = await html2canvas(targetElement, {
+        backgroundColor: null,
         scale: 2,
         logging: false,
         useCORS: true,
+        allowTaint: true,
+        imageTimeout: 15000,
       });
 
       canvas.toBlob((blob) => {
@@ -103,8 +260,16 @@ export default function SharePage() {
         }
       }, 'image/png');
     } catch (error) {
-      console.error('Error downloading:', error);
+      // Suppress oklab parsing errors - they're non-critical
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!errorMessage.includes('oklab') && !errorMessage.includes('oklch')) {
+        console.error('Error downloading:', error);
+      }
     } finally {
+      // Restore original styles
+      if (restoreStyles) {
+        restoreStyles();
+      }
       setIsGenerating(false);
     }
   };

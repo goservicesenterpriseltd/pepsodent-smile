@@ -1,10 +1,10 @@
 'use client';
 
 import { useEffect, useMemo, useState } from 'react';
-import { observer } from 'mobx-react-lite';
 
-import { locationStore } from '@/stores/LocationStore';
 import type { PepsometerLocation } from '@/lib/api/pepsometer-api';
+import { locationStore } from '@/stores/LocationStore';
+import { observer } from 'mobx-react-lite';
 
 function getStateLabel(loc: PepsometerLocation): string {
   const raw = loc.state;
@@ -209,7 +209,7 @@ export const LocationPickerFab = observer(function LocationPickerFab() {
             setQuery('');
             setOpen(true);
           }}
-          className="group flex items-center gap-2 bg-black/80 text-white rounded-full shadow-xl px-4 py-3 hover:bg-black transition"
+          className="group flex items-center gap-2 bg-black/80 text-white rounded-full shadow-xl px-4 py-3 hover:bg-black transition border border-white/25"
           aria-label="Open location picker"
         >
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/10 font-bold">
