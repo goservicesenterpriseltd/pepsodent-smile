@@ -1,6 +1,7 @@
 'use client';
 
 import { CameraPreview } from '@/components/camera/CameraPreview';
+import { Logo } from '@/components/ui/Logo';
 import { cameraStore } from '@/stores/CameraStore';
 import { fileToBase64 } from '@/lib/image/image-storage';
 import { luxandAPIStore } from '@/stores/LuxandAPIStore';
@@ -84,16 +85,21 @@ export default observer(function CapturePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#003366] via-[#004d99] to-[#002244] p-4">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-black p-4 relative">
+      {/* Logo Top Right */}
+      <div className="absolute top-4 left-4 w-32 h-24 z-10">
+        <Logo width={128} height={96} />
+      </div>
+      
       <div className="w-full max-w-4xl space-y-6">
         <div className="text-center mb-6">
           <h1 className="text-4xl font-bold text-white mb-2">
             Show Us Your Smile, {userStore.user?.firstName}! 😊
           </h1>
           <p className="text-white/80 text-lg mb-2">
-            Position your face in the ring and smile your brightest!
+          Smile wide. We&apos;re counting down.
           </p>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 mt-4 max-w-md mx-auto">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 mt-4 max-w-md mx-auto border border-white/20">
             <p className="text-white/90 text-sm">
               💡 <strong>Tips:</strong> Make sure your face is clearly visible, well-lit, and centered in the frame
             </p>

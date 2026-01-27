@@ -1,4 +1,5 @@
-import { openDB, DBSchema, IDBPDatabase } from 'idb';
+import { DBSchema, IDBPDatabase, openDB } from 'idb';
+
 import type { SmileAttempt } from '@/types/leaderboard';
 
 interface PepsodentDB extends DBSchema {
@@ -48,5 +49,10 @@ export async function clearAllAttempts(): Promise<void> {
   const tx = db.transaction('attempts', 'readwrite');
   await tx.store.clear();
   await tx.done;
+}
+
+export async function getAttemptById(id: string): Promise<SmileAttempt | undefined> {
+  const db = await getDB();
+  return db.get('attempts', id);
 }
 

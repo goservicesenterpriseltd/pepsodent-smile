@@ -1,23 +1,21 @@
 @import "tailwindcss";
 
 :root {
-  /* Pepsodent Color Scheme */
-  --pepsodent-blue: #003366; /* Dark blue from logo */
-  --pepsodent-blue-light: #004d99;
-  --pepsodent-blue-dark: #002244;
-  --pepsodent-red: #e60012; /* Red from smile arc */
-  --pepsodent-red-light: #ff1a2e;
-  --pepsodent-red-dark: #cc0010;
+  /* Black & White Theme */
+  --pepsodent-black: #000000;
+  --pepsodent-black-light: #1a1a1a;
+  --pepsodent-black-dark: #0a0a0a;
   --pepsodent-white: #ffffff;
   --pepsodent-gray: #f5f5f5;
   --pepsodent-gray-dark: #e0e0e0;
+  --pepsodent-gray-light: #fafafa;
   
   --background: var(--pepsodent-white);
-  --foreground: var(--pepsodent-blue);
-  --primary: var(--pepsodent-blue);
-  --primary-light: var(--pepsodent-blue-light);
-  --accent: var(--pepsodent-red);
-  --accent-light: var(--pepsodent-red-light);
+  --foreground: var(--pepsodent-black);
+  --primary: var(--pepsodent-black);
+  --primary-light: var(--pepsodent-black-light);
+  --accent: var(--pepsodent-black);
+  --accent-light: var(--pepsodent-black-light);
 }
 
 @theme inline {
@@ -54,12 +52,12 @@ body {
 }
 
 ::-webkit-scrollbar-thumb {
-  background: var(--pepsodent-blue);
+  background: var(--pepsodent-black);
   border-radius: 4px;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--pepsodent-blue-light);
+  background: var(--pepsodent-black-light);
 }
 
 /* Animations */
@@ -102,6 +100,6 @@ button, a {
 button:focus-visible,
 input:focus-visible,
 select:focus-visible {
-  outline: 2px solid var(--pepsodent-red);
+  outline: 2px solid var(--pepsodent-black);
   outline-offset: 2px;
 }
