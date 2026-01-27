@@ -5,7 +5,7 @@ class SmileDetectionStore {
   smileConfidence = 0; // 0-1
   isSmiling = false;
   feedbackMessage = '';
-  detectionModel: any = null;
+  detectionModel: unknown = null;
 
   constructor() {
     makeAutoObservable(this);
@@ -31,7 +31,7 @@ class SmileDetectionStore {
     }
   }
 
-  setModel(model: any) {
+  setModel(model: unknown) {
     this.detectionModel = model;
   }
 

@@ -1,13 +1,18 @@
 'use client';
 
-import { useState } from 'react';
-import { observer } from 'mobx-react-lite';
 import { Button } from '@/components/ui/Button';
-import { Input } from '@/components/ui/Input';
-import { Select } from '@/components/ui/Select';
-import { userStore } from '@/stores/UserStore';
-import { uiStore } from '@/stores/UIStore';
 import type { Gender } from '@/types/user';
+import { Input } from '@/components/ui/Input';
+import { Logo } from '@/components/ui/Logo';
+import { Select } from '@/components/ui/Select';
+import { appConfig } from '@/lib/config/app-config';
+import { getAllAttempts } from '@/lib/persistence/indexeddb';
+import { getAttemptsForIdentity } from '@/lib/leaderboard/identity';
+import { observer } from 'mobx-react-lite';
+import { toastStore } from '@/stores/ToastStore';
+import { uiStore } from '@/stores/UIStore';
+import { useState } from 'react';
+import { userStore } from '@/stores/UserStore';
 
 export default observer(function PersonalizePage() {
   const [formData, setFormData] = useState({
@@ -47,13 +52,37 @@ export default observer(function PersonalizePage() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (validate()) {
-      userStore.updateUser(formData);
-      uiStore.navigateTo('capture');
+
+    if (!validate()) {
+      return;
     }
+
+    try {
+      // Check previous attempts for this identity (email and/or phone)
+      const attempts = await getAllAttempts();
+      const identity = {
+        email: formData.email.trim(),
+        phone: formData.phone.trim(),
+      };
+
+      const userAttempts = getAttemptsForIdentity(attempts, identity);
+      const maxAttempts = appConfig.maxAttempts;
+
+      if (userAttempts.length >= maxAttempts) {
+        toastStore.error(
+          'Maximum attempts reached for this email/phone. Please contact a staff member to continue.'
+        );
+        return;
+      }
+    } catch (error) {
+      console.error('Error checking attempts before camera:', error);
+      // Fail open: allow play to proceed but still log error
+    }
+
+    userStore.updateUser(formData);
+    uiStore.navigateTo('capture');
   };
 
   const genderOptions = [
@@ -64,14 +93,19 @@ export default observer(function PersonalizePage() {
   ];
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-white via-[#f5f5f5] to-[#e0e0e0] p-4">
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl p-8 space-y-6">
+    <div className="min-h-screen flex items-center justify-center bg-white p-4 relative">
+      {/* Logo Top Right */}
+      <div className="absolute top-4 left-4 w-32 h-24 z-10">
+        <Logo width={128} height={96} />
+      </div>
+      
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border-2 border-black p-8 space-y-6">
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-[#003366] mb-2">
+          <h1 className="text-3xl font-bold text-black mb-2">
             Personalize Your Experience
           </h1>
           <p className="text-gray-600">
-            Tell us a bit about yourself to get personalized results
+            Let&apos;s put a name to that great smile.
           </p>
         </div>
 

@@ -7,8 +7,19 @@ import PersonalizePage from './(screens)/personalize/page';
 import CapturePage from './(screens)/capture/page';
 import ProcessingPage from './(screens)/processing/page';
 import ResultsPage from './(screens)/results/page';
+import { useEffect } from 'react';
 
 export default observer(function Home() {
+  // Ensure welcome screen is shown on initial load
+  useEffect(() => {
+    if (uiStore.currentScreen !== 'welcome' && typeof window !== 'undefined') {
+      const path = window.location.pathname;
+      if (path === '/' || path.startsWith('/welcome')) {
+        uiStore.navigateTo('welcome');
+      }
+    }
+  }, []);
+
   const renderScreen = () => {
     switch (uiStore.currentScreen) {
       case 'welcome':

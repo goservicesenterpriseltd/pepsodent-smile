@@ -16,9 +16,9 @@ export function Button({
   const baseStyles = 'font-semibold rounded-full transition-all duration-300 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none';
   
   const variantStyles = {
-    primary: 'bg-[#003366] text-white hover:bg-[#004d99] shadow-lg hover:shadow-xl',
-    secondary: 'bg-white text-[#003366] border-2 border-[#003366] hover:bg-[#f5f5f5]',
-    accent: 'bg-[#e60012] text-white hover:bg-[#ff1a2e] shadow-lg hover:shadow-xl',
+    primary: 'bg-black text-white hover:bg-gray-800 shadow-lg hover:shadow-xl',
+    secondary: 'bg-white text-black border-2 border-black hover:bg-gray-100',
+    accent: 'bg-black text-white hover:bg-gray-800 shadow-lg hover:shadow-xl',
   };
 
   const sizeStyles = {

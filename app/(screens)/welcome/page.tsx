@@ -1,78 +1,332 @@
 'use client';
 
-import { observer } from 'mobx-react-lite';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
+
 import { Button } from '@/components/ui/Button';
+import Image from 'next/image';
+import Link from 'next/link';
+import { Logo } from '@/components/ui/Logo';
+import { observer } from 'mobx-react-lite';
 import { uiStore } from '@/stores/UIStore';
 
-export default observer(function WelcomePage() {
+function WelcomeContent({ variant: initialVariant = 1 }: { variant?: number }) {
+  const [variant, setVariant] = useState(initialVariant);
+
+  useEffect(() => {
+    // Read from URL params if available
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const variantParam = params.get('variant');
+      if (variantParam) {
+        const parsedVariant = parseInt(variantParam, 10);
+        if ([1, 2, 3].includes(parsedVariant)) {
+          setVariant(parsedVariant);
+        }
+      }
+    }
+  }, []);
+
   const handleEnter = () => {
     uiStore.navigateTo('personalize');
   };
 
-  return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-gradient-to-br from-[#003366] via-[#004d99] to-[#002244] p-4">
-      <div className="max-w-2xl w-full text-center space-y-8 animate-fade-in">
-        {/* Logo/Brand */}
-        <div className="mb-8">
-          <h1 className="text-6xl md:text-8xl font-bold text-white mb-4 drop-shadow-2xl">
-            Pepsodent
-          </h1>
-          <div className="w-64 h-2 bg-[#e60012] mx-auto rounded-full"></div>
-        </div>
-
-        {/* Welcome Message */}
-        <div className="space-y-6">
-          <h2 className="text-4xl md:text-5xl font-bold text-white drop-shadow-lg">
+  // Variant 1: Vertical split with logo centered on border
+  const renderVariant1 = () => (
+    <div className="min-h-screen flex relative">
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage: "url('/bg_main.png')",
+          backgroundRepeat: "no-repeat",
+          backgroundPosition: "center",
+          backgroundSize: "cover",
+        }}
+      />
+      <div className="absolute z-20 w-32 h-24 top-8 left-8">
+        <Logo width={160} height={128} />
+      </div>
+      <div className='absolute top-0 left-0 w-full h-full p-4 flex items-center flex-col z-20'>
+        <div className="max-w-md w-full space-y-8 text-center mt-10">
+          <h2 className="text-5xl md:text-6xl font-bold text-black">
             Smile Game! 😊
           </h2>
-          <p className="text-xl md:text-2xl text-white/90 max-w-lg mx-auto leading-relaxed">
-            Show us your brightest smile and get an amazing score! 
-            Compete with others and see where you rank on our leaderboard.
+          <p className="text-2xl md:text-2xl text-black/80 leading-relaxed">
+            Your smile has a score. Let&apos;s find it.
+          </p>
+          <div className="pt-4 flex gap-6">
+            <Button
+              variant="accent"
+              size="lg"
+              onClick={handleEnter}
+              className="text-lg px-8 py-6 bg-black text-white hover:bg-gray-800 shadow-2xl"
+            >
+              Let&apos;s Play! 🎮
+            </Button>
+            <Link href="/leaderboard" target='_blank'>
+              <Button
+                variant="secondary"
+                size="lg"
+                className="text-lg px-8 py-6 bg-white text-black hover:bg-gray-100 border-2 border-primary"
+              >
+                View Leaderboard 🏆
+              </Button>
+            </Link>
+          </div>
+        </div>
+        <div className=" max-w-lg w-full text-center mt-44">
+          <div className="grid grid-cols-3 gap-6 text-white mb-8">
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+              <div className="text-4xl mb-3">📸</div>
+              <h3 className="font-semibold mb-2 text-xl">Capture</h3>
+              <p className="text-sm text-white/80">Take your best smile photo</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+              <div className="text-4xl mb-3">⭐</div>
+              <h3 className="font-semibold mb-2 text-xl">Score</h3>
+              <p className="text-sm text-white/80">Get your smile rating</p>
+            </div>
+            <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20">
+              <div className="text-4xl mb-3">🏆</div>
+              <h3 className="font-semibold mb-2 text-xl">Compete</h3>
+              <p className="text-sm text-white/80">Climb the leaderboard</p>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div className="absolute z-10 inset-y-0 right-0 -top-26 bottom-36 flex items-center justify-center pointer-events-none">
+        <Image
+          src="/asset1.png"
+          alt="Pepsodent Paste"
+          width={460}
+          height={328}
+          className="w-full h-full object-contain opacity-80"
+          priority
+        />
+      </div>
+    </div>
+  );
+
+  // Variant 2: Horizontal split with logo on top border
+  const renderVariant2 = () => (
+    <div className="min-h-screen flex flex-col relative bg-white">
+      {/* Top Side - Black */}
+      <div className="flex-1 bg-black flex flex-col items-center justify-center p-8 relative">
+        <div className="max-w-2xl w-full space-y-6 text-center">
+          <h2 className="text-5xl md:text-6xl font-bold text-white">
+            Smile Game! 😊
+          </h2>
+          <p className="text-2xl md:text-3xl text-white/80 leading-relaxed">
+            Your smile has a score. Let&apos;s find it.
           </p>
         </div>
+      </div>
 
-        {/* Enter Button */}
-        <div className="pt-8 flex flex-col sm:flex-row gap-4 justify-center items-center">
-          <Button
-            variant="accent"
-            size="lg"
-            onClick={handleEnter}
-            className="text-2xl px-12 py-6 shadow-2xl hover:shadow-[#e60012]/50"
-          >
-            Let's Play! 🎮
-          </Button>
-          <Link href="/leaderboard">
-            <Button
-              variant="secondary"
-              size="lg"
-              className="text-xl px-8 py-6 bg-white/10 backdrop-blur-sm border-2 border-white/30 text-white hover:bg-white/20"
-            >
-              View Leaderboard 🏆
-            </Button>
-          </Link>
+      {/* Border with Logo */}
+      <div className="h-20 md:h-24 bg-white relative z-10 flex items-center justify-center shadow-[0_0_30px_rgba(0,0,0,0.3),0_0_60px_rgba(0,0,0,0.2)]">
+        <div className="absolute inset-0 bg-white"></div>
+        <div className="relative z-20 w-40 h-28 md:w-48 md:h-36">
+          <Image
+            src="/logo.png"
+            alt="Pepsodent Logo"
+            width={192}
+            height={144}
+            className="w-full h-full object-contain"
+            priority
+          />
         </div>
+      </div>
 
-        {/* Features */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mt-12 text-white/80">
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-            <div className="text-3xl mb-2">📸</div>
-            <h3 className="font-semibold mb-1">Capture</h3>
-            <p className="text-sm">Take your best smile photo</p>
+      {/* Bottom Side - White */}
+      <div className="flex-1 bg-white flex flex-col items-center justify-center p-8 relative">
+        <div className="max-w-2xl w-full space-y-8">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+            <div className="bg-black/5 rounded-lg p-6 border-2 border-black/10">
+              <div className="text-4xl mb-3">📸</div>
+              <h3 className="font-semibold mb-2 text-xl text-black">Capture</h3>
+              <p className="text-sm text-black/70">Take your best smile photo</p>
+            </div>
+            <div className="bg-black/5 rounded-lg p-6 border-2 border-black/10">
+              <div className="text-4xl mb-3">⭐</div>
+              <h3 className="font-semibold mb-2 text-xl text-black">Score</h3>
+              <p className="text-sm text-black/70">Get your smile rating</p>
+            </div>
+            <div className="bg-black/5 rounded-lg p-6 border-2 border-black/10">
+              <div className="text-4xl mb-3">🏆</div>
+              <h3 className="font-semibold mb-2 text-xl text-black">Compete</h3>
+              <p className="text-sm text-black/70">Climb the leaderboard</p>
+            </div>
           </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-            <div className="text-3xl mb-2">⭐</div>
-            <h3 className="font-semibold mb-1">Score</h3>
-            <p className="text-sm">Get your smile rating</p>
-          </div>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-4">
-            <div className="text-3xl mb-2">🏆</div>
-            <h3 className="font-semibold mb-1">Compete</h3>
-            <p className="text-sm">Climb the leaderboard</p>
+          <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            <Button
+              variant="accent"
+              size="lg"
+              onClick={handleEnter}
+              className="text-xl px-12 py-6 bg-black text-white hover:bg-gray-800 shadow-2xl"
+            >
+              Let&apos;s Play! 🎮
+            </Button>
+            <Link href="/leaderboard" target='_blank'>
+              <Button
+                variant="secondary"
+                size="lg"
+                className="text-xl px-8 py-6 bg-white text-black hover:bg-gray-100 border-2 border-black"
+              >
+                View Leaderboard 🏆
+              </Button>
+            </Link>
           </div>
         </div>
       </div>
     </div>
+  );
+
+  // Variant 3: Diagonal split with logo in corner
+  const renderVariant3 = () => (
+    <div className="min-h-screen flex relative bg-black overflow-hidden">
+      {/* White Side - Top Left */}
+      <div className="absolute top-0 left-0 w-full h-full bg-white" style={{ clipPath: 'polygon(0 0, 100% 0, 0 100%)' }}>
+        <div className="h-full flex flex-col items-start justify-center p-8 md:p-16">
+          <div className="max-w-md space-y-8">
+            <h2 className="text-5xl md:text-6xl font-bold text-black">
+              Smile Game! 😊
+            </h2>
+            <p className="text-xl md:text-2xl text-black/80 leading-relaxed">
+              Your smile has a score. Let&apos;s find it.
+            </p>
+            <div className="pt-4 flex gap-6">
+              <Button
+                variant="accent"
+                size="md"
+                onClick={handleEnter}
+                className="text-md px-12 py-6 bg-black text-white hover:bg-gray-800 shadow-2xl"
+              >
+                Let&apos;s Play! 🎮
+              </Button>
+              <Link href="/leaderboard" target='_blank'>
+                <Button
+                  variant="secondary"
+                  size="md"
+                  className="text-md px-8 py-6 bg-white text-black hover:bg-gray-100 border-2 border-primary"
+                >
+                  View Leaderboard 🏆
+                </Button>
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Black Side - Bottom Right */}
+      <div className="absolute top-0 left-0 w-full h-full bg-black" style={{ clipPath: 'polygon(100% 0, 100% 100%, 0 100%)' }}>
+        <div className="h-full flex flex-col items-end justify-center p-8 md:p-12">
+          <div className="max-w-2xl w-full text-right mt-48">
+            <div className="grid grid-cols-3 gap-6 text-white mb-8">
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 inline-block">
+                <div className="text-4xl mb-3">📸</div>
+                <h3 className="font-semibold mb-2 text-xl">Capture</h3>
+                <p className="text-sm text-white/80">Take your best smile photo</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 inline-block">
+                <div className="text-4xl mb-3">⭐</div>
+                <h3 className="font-semibold mb-2 text-xl">Score</h3>
+                <p className="text-sm text-white/80">Get your smile rating</p>
+              </div>
+              <div className="bg-white/10 backdrop-blur-sm rounded-lg p-6 border border-white/20 inline-block">
+                <div className="text-4xl mb-3">🏆</div>
+                <h3 className="font-semibold mb-2 text-xl">Compete</h3>
+                <p className="text-sm text-white/80">Climb the leaderboard</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="absolute z-20 w-32 h-24 top-8 left-8">
+        <Image
+          src="/logo.png"
+          alt="Pepsodent Logo"
+          width={160}
+          height={128}
+          className="w-full h-full object-contain"
+          priority
+        />
+      </div>
+    </div>
+  );
+
+  // Render based on variant
+  switch (variant) {
+    case 1:
+      return renderVariant1();
+    case 2:
+      return renderVariant2();
+    case 3:
+      return renderVariant3();
+    default:
+      return renderVariant1();
+  }
+}
+
+export default observer(function WelcomePage() {
+  // Read variant from URL on mount
+  const [variant, setVariant] = useState(1);
+
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const variantParam = params.get('variant');
+      if (variantParam) {
+        const parsedVariant = parseInt(variantParam, 10);
+        if ([1, 2, 3].includes(parsedVariant)) {
+          setVariant(parsedVariant);
+        }
+      }
+    }
+  }, []);
+
+  const switchVariant = (newVariant: number) => {
+    setVariant(newVariant);
+    if (typeof window !== 'undefined') {
+      const url = new URL(window.location.href);
+      url.searchParams.set('variant', newVariant.toString());
+      window.history.pushState({}, '', url.toString());
+    }
+  };
+
+  return (
+    <>
+      <WelcomeContent variant={variant} />
+      {/* Variant Switcher - for testing/design review */}
+      <div className="hidden fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 flex gap-2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border-2 border-black">
+        <button
+          onClick={() => switchVariant(1)}
+          className={`px-4 py-2 rounded-full font-semibold transition-all ${variant === 1
+            ? 'bg-black text-white'
+            : 'bg-white text-black border-2 border-black hover:bg-gray-100'
+            }`}
+        >
+          Design 1
+        </button>
+        <button
+          onClick={() => switchVariant(2)}
+          className={`px-4 py-2 rounded-full font-semibold transition-all ${variant === 2
+            ? 'bg-black text-white'
+            : 'bg-white text-black border-2 border-black hover:bg-gray-100'
+            }`}
+        >
+          Design 2
+        </button>
+        <button
+          onClick={() => switchVariant(3)}
+          className={`px-4 py-2 rounded-full font-semibold transition-all ${variant === 3
+            ? 'bg-black text-white'
+            : 'bg-white text-black border-2 border-black hover:bg-gray-100'
+            }`}
+        >
+          Design 3
+        </button>
+      </div>
+    </>
   );
 });
 
