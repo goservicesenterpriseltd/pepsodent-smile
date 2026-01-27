@@ -6,7 +6,6 @@ import { Button } from '@/components/ui/Button';
 import { GameShareCard } from './GameShareCard';
 import type { LuxandFaceRegion } from '@/types/luxand-api';
 import { QRCodeCanvas } from 'qrcode.react';
-import { ShareCard } from './ShareCard';
 import type { SmileAttempt } from '@/types/leaderboard';
 import { getShareUrl } from '@/lib/share/share-utils';
 import html2canvas from 'html2canvas';
@@ -18,7 +17,72 @@ interface ShareModalProps {
   onClose: () => void;
 }
 
-export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalProps) {
+// Helper function to ensure explicit RGB color values for html2canvas compatibility
+// html2canvas has issues with oklab/oklch colors, so we set explicit RGB values from computed styles
+const prepareElementForCanvas = (element: HTMLElement) => {
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_ELEMENT,
+    null
+  );
+
+  const elements: HTMLElement[] = [element];
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    if (node instanceof HTMLElement) {
+      elements.push(node);
+    }
+    node = walker.nextNode();
+  }
+
+  const originalStyles: Map<HTMLElement, { [key: string]: string }> = new Map();
+
+  elements.forEach((el) => {
+    const computedStyle = window.getComputedStyle(el);
+    const styleToRestore: { [key: string]: string } = {};
+
+    // Set explicit RGB values for color properties to help html2canvas
+    const colorProperties = [
+      'color',
+      'backgroundColor',
+      'borderColor',
+      'borderTopColor',
+      'borderRightColor',
+      'borderBottomColor',
+      'borderLeftColor',
+    ];
+
+    colorProperties.forEach((prop) => {
+      const computedValue = computedStyle.getPropertyValue(prop);
+      // Only set if we have a valid color value (not transparent/initial)
+      if (computedValue && computedValue !== 'transparent' && computedValue !== 'rgba(0, 0, 0, 0)') {
+        const currentStyle = el.style.getPropertyValue(prop);
+        styleToRestore[prop] = currentStyle;
+        // Set the computed RGB value explicitly
+        el.style.setProperty(prop, computedValue, 'important');
+      }
+    });
+
+    if (Object.keys(styleToRestore).length > 0) {
+      originalStyles.set(el, styleToRestore);
+    }
+  });
+
+  return () => {
+    // Restore original styles
+    originalStyles.forEach((styles, el) => {
+      Object.entries(styles).forEach(([prop, value]) => {
+        if (value) {
+          el.style.setProperty(prop, value);
+        } else {
+          el.style.removeProperty(prop);
+        }
+      });
+    });
+  };
+};
+
+export function ShareModal({ attempt, faceRegion: _faceRegion, isOpen, onClose }: ShareModalProps) {
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
   const shareCardRef = useRef<HTMLDivElement>(null);
   const shareUrl = getShareUrl(attempt.id);
@@ -40,12 +104,42 @@ export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalP
     if (!shareCardRef.current) return;
 
     setIsGeneratingImage(true);
+    let restoreStyles: (() => void) | null = null;
+    
     try {
-      const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#001122',
+      // Find the actual GameShareCard element (first child div)
+      const cardElement = shareCardRef.current.querySelector('div > div') as HTMLElement;
+      const targetElement = cardElement || shareCardRef.current;
+      
+      // Wait for all images to load
+      const images = targetElement.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve();
+              } else {
+                img.onload = () => resolve();
+                img.onerror = () => resolve(); // Continue even if image fails
+              }
+            })
+        )
+      );
+      
+      // Small delay to ensure rendering is complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      
+      // Ensure explicit RGB color values for html2canvas compatibility
+      restoreStyles = prepareElementForCanvas(targetElement);
+      
+      const canvas = await html2canvas(targetElement, {
+        backgroundColor: null, // Transparent background
         scale: 2, // High quality
         logging: false,
         useCORS: true,
+        allowTaint: true,
+        imageTimeout: 15000,
       });
 
       canvas.toBlob((blob) => {
@@ -61,8 +155,16 @@ export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalP
         }
       }, 'image/png');
     } catch (error) {
-      console.error('Error generating image:', error);
+      // Suppress oklab parsing errors - they're non-critical
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!errorMessage.includes('oklab') && !errorMessage.includes('oklch')) {
+        console.error('Error generating image:', error);
+      }
     } finally {
+      // Restore original styles
+      if (restoreStyles) {
+        restoreStyles();
+      }
       setIsGeneratingImage(false);
     }
   };
@@ -71,12 +173,42 @@ export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalP
     if (!shareCardRef.current) return;
 
     setIsGeneratingImage(true);
+    let restoreStyles: (() => void) | null = null;
+    
     try {
-      const canvas = await html2canvas(shareCardRef.current, {
-        backgroundColor: '#001122',
+      // Find the actual GameShareCard element (first child div)
+      const cardElement = shareCardRef.current.querySelector('div > div') as HTMLElement;
+      const targetElement = cardElement || shareCardRef.current;
+      
+      // Wait for all images to load
+      const images = targetElement.querySelectorAll('img');
+      await Promise.all(
+        Array.from(images).map(
+          (img) =>
+            new Promise<void>((resolve) => {
+              if (img.complete) {
+                resolve();
+              } else {
+                img.onload = () => resolve();
+                img.onerror = () => resolve(); // Continue even if image fails
+              }
+            })
+        )
+      );
+      
+      // Small delay to ensure rendering is complete
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      
+      // Ensure explicit RGB color values for html2canvas compatibility
+      restoreStyles = prepareElementForCanvas(targetElement);
+      
+      const canvas = await html2canvas(targetElement, {
+        backgroundColor: null, // Transparent background
         scale: 2,
         logging: false,
         useCORS: true,
+        allowTaint: true,
+        imageTimeout: 15000,
       });
 
       canvas.toBlob(async (blob) => {
@@ -95,7 +227,7 @@ export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalP
             } else {
               // Fallback: share URL
               await navigator.share({
-                title: `I scored ${Math.round(attempt.score)} on the Pepso-Meter! 😊`,
+                title: `I scored ${Math.round(attempt.score)} on the Pepsometer! 😊`,
                 text: `Check out my Pepso Confidence Score! Can you beat ${Math.round(attempt.score)}?`,
                 url: shareUrl,
               });
@@ -108,8 +240,16 @@ export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalP
         }
       }, 'image/png');
     } catch (error) {
-      console.error('Error generating share image:', error);
+      // Suppress oklab parsing errors - they're non-critical
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (!errorMessage.includes('oklab') && !errorMessage.includes('oklch')) {
+        console.error('Error generating share image:', error);
+      }
     } finally {
+      // Restore original styles
+      if (restoreStyles) {
+        restoreStyles();
+      }
       setIsGeneratingImage(false);
     }
   };
@@ -149,7 +289,7 @@ export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalP
 
         <div className="p-6 md:p-8">
           <h2 className="text-2xl font-bold text-[#003366] mb-6 text-center">
-            Share Your Pepso Confidence Score!
+            Share Your Pepsometer Confidence Score!
           </h2>
 
           {/* Share Card */}
@@ -192,7 +332,7 @@ export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalP
           </div>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row gap-3">
+          <div className="flex flex-col sm:flex-row gap-3 hidden">
             <Button
               variant="primary"
               size="lg"
@@ -221,6 +361,7 @@ export function ShareModal({ attempt, faceRegion, isOpen, onClose }: ShareModalP
                 type="text"
                 value={shareUrl}
                 readOnly
+                aria-label="Share link URL"
                 className="flex-1 text-xs p-2 border rounded bg-white"
                 onClick={(e) => (e.target as HTMLInputElement).select()}
               />
