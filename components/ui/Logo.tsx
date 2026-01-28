@@ -15,16 +15,16 @@ export function Logo({ className = '', width = 120, height = 90 }: LogoProps) {
   const isHomePage = pathname === '/';
 
   const logoContent = (
-    <div className={`relative ${className}`}>
-      <Image
-        src="/logo.png"
-        alt="Pepsodent Logo"
-        width={width}
-        height={height}
-        className="object-contain"
-        priority
-      />
-    </div>
+      <div className={`relative ${className}`}>
+        <Image
+          src="/logo.png"
+          alt="Pepsodent Logo"
+          width={width}
+          height={height}
+          className="object-contain"
+          priority
+        />
+      </div>
   );
 
   if (isHomePage) {

@@ -56,3 +56,17 @@ export async function getAttemptById(id: string): Promise<SmileAttempt | undefin
   return db.get('attempts', id);
 }
 
+export async function updateAttemptRemoteId(id: string, remoteId: string): Promise<void> {
+  const db = await getDB();
+  const attempt = await db.get('attempts', id);
+  if (!attempt) return;
+
+  const updated: SmileAttempt = {
+    ...attempt,
+    remoteId,
+  };
+
+  await db.put('attempts', updated);
+}
+
+

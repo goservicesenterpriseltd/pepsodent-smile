@@ -18,15 +18,12 @@
  * @component
  */
 
-import { useEffect, useState } from 'react';
-
 import Image from 'next/image';
 import { Logo } from '../ui/Logo';
-import { QRCodeCanvas } from 'qrcode.react';
-import { base64ToImage } from '@/lib/share/share-utils';
+import { forwardRef } from 'react';
 
 interface GameShareCardProps {
-  /** Base64 encoded user image data */
+  /** User image source: base64 string or direct URL */
   userImageSrc: string;
   /** User's score (0-100) */
   score: number;
@@ -40,47 +37,29 @@ interface GameShareCardProps {
   className?: string;
 }
 
-export function GameShareCard({
-  userImageSrc,
-  score,
-  qrCodeSrc,
-  shareUrl,
-  logoSrc,
-  className = '',
-}: GameShareCardProps) {
-  const [userImageUrl, setUserImageUrl] = useState<string>('');
-  const [isLoading, setIsLoading] = useState(true);
-
-  // Load user image from base64
-  useEffect(() => {
-    const loadImage = async () => {
-      try {
-        setIsLoading(true);
-        if (userImageSrc) {
-          // If it's already a data URL, use it directly
-          if (userImageSrc.startsWith('data:')) {
-            setUserImageUrl(userImageSrc);
-          } else {
-            // Otherwise, convert base64 to data URL
-            const img = await base64ToImage(userImageSrc);
-            setUserImageUrl(img.src);
-          }
-        }
-      } catch (error) {
-        console.error('Error loading user image:', error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
-    loadImage();
-  }, [userImageSrc]);
+export const GameShareCard = forwardRef<HTMLDivElement, GameShareCardProps>(
+  (
+    {
+      userImageSrc,
+      score,
+      className = '',
+    }: GameShareCardProps,
+    ref
+  ) => {
+  // Normalize user image from base64 (or existing data URL) – no state/effects needed
+  const hasUserImage = Boolean(userImageSrc);
+  const userImageUrl = hasUserImage
+    ? userImageSrc.startsWith('data:')
+      ? userImageSrc
+      : `data:image/jpeg;base64,${userImageSrc}`
+    : '';
 
   // Calculate rounded score for display
   const roundedScore = Math.round(score);
 
   return (
     <div
+      ref={ref}
       className={`
         relative
         w-[320px] 
@@ -135,11 +114,7 @@ export function GameShareCard({
 
             {/* Avatar container with white border */}
             <div className="relative w-full h-full rounded-lg border-4 border-white overflow-hidden shadow-2xl">
-              {isLoading ? (
-                <div className="w-full h-full bg-gray-300 animate-pulse flex items-center justify-center">
-                  <span className="text-gray-500 text-xs">Loading...</span>
-                </div>
-              ) : userImageUrl ? (
+              {userImageUrl ? (
                 <Image
                   src={userImageUrl}
                   alt="User"
@@ -147,7 +122,6 @@ export function GameShareCard({
                   fill
                   style={{ objectPosition: 'center center' }}
                   unoptimized
-                // sizes="85px"
                 />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center">
@@ -219,5 +193,6 @@ export function GameShareCard({
 
     </div>
   );
-}
+});
 
+GameShareCard.displayName = 'GameShareCard';

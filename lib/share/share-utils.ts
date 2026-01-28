@@ -1,3 +1,5 @@
+import html2canvas from 'html2canvas';
+
 /**
  * Get the base URL for share links
  * In dev mode, uses IP address from NEXT_PUBLIC_DEV_URL or detects from window.location
@@ -29,7 +31,7 @@ export function getShareBaseUrl(): string {
     } else {
       // Production: use remote URL
       return process.env.NEXT_PUBLIC_BASE_URL || 'https://www.pepsometer.fun';
-    }
+  }
   }
   
   // Fallback for SSR
@@ -116,4 +118,137 @@ export function downloadImage(blob: Blob, filename: string = 'pepsodent-smile-sc
   document.body.removeChild(link);
   URL.revokeObjectURL(url);
 }
+
+/**
+ * Ensure explicit RGB color values for html2canvas compatibility.
+ * html2canvas has issues with oklab/oklch colors, so we set explicit RGB values from computed styles.
+ */
+const prepareElementForCanvas = (element: HTMLElement) => {
+  const walker = document.createTreeWalker(
+    element,
+    NodeFilter.SHOW_ELEMENT,
+    null
+  );
+
+  const elements: HTMLElement[] = [element];
+  let node: Node | null = walker.nextNode();
+  while (node) {
+    if (node instanceof HTMLElement) {
+      elements.push(node);
+    }
+    node = walker.nextNode();
+  }
+
+  const originalStyles: Map<HTMLElement, { [key: string]: string }> = new Map();
+
+  elements.forEach((el) => {
+    const computedStyle = window.getComputedStyle(el);
+    const styleToRestore: { [key: string]: string } = {};
+
+    // Set explicit RGB values for color properties to help html2canvas
+    const colorProperties = [
+      'color',
+      'backgroundColor',
+      'borderColor',
+      'borderTopColor',
+      'borderRightColor',
+      'borderBottomColor',
+      'borderLeftColor',
+    ];
+
+    colorProperties.forEach((prop) => {
+      const computedValue = computedStyle.getPropertyValue(prop);
+      // Only set if we have a valid color value (not transparent/initial)
+      if (computedValue && computedValue !== 'transparent' && computedValue !== 'rgba(0, 0, 0, 0)') {
+        const currentStyle = el.style.getPropertyValue(prop);
+        styleToRestore[prop] = currentStyle;
+        // Set the computed RGB value explicitly
+        el.style.setProperty(prop, computedValue, 'important');
+      }
+    });
+
+    if (Object.keys(styleToRestore).length > 0) {
+      originalStyles.set(el, styleToRestore);
+    }
+  });
+
+  return () => {
+    // Restore original styles
+    originalStyles.forEach((styles, el) => {
+      Object.entries(styles).forEach(([prop, value]) => {
+        if (value) {
+          el.style.setProperty(prop, value);
+        } else {
+          el.style.removeProperty(prop);
+        }
+      });
+    });
+  };
+};
+
+/**
+ * Capture a DOM element as a high-quality PNG Blob using html2canvas.
+ * Ensures all images are loaded and colors are compatible before rendering.
+ */
+export async function captureElementToPngBlob(targetElement: HTMLElement): Promise<Blob | null> {
+  // Wait for all images to load
+  const images = targetElement.querySelectorAll('img');
+  await Promise.all(
+    Array.from(images).map(
+      (img) =>
+        new Promise<void>((resolve) => {
+          if (img.complete) {
+            resolve();
+          } else {
+            img.onload = () => resolve();
+            img.onerror = () => resolve();
+          }
+        })
+    )
+  );
+
+  // Small delay to ensure rendering is complete
+  await new Promise((resolve) => setTimeout(resolve, 100));
+
+  let restoreStyles: (() => void) | null = null;
+
+  try {
+    // Ensure explicit RGB color values for html2canvas compatibility
+    restoreStyles = prepareElementForCanvas(targetElement);
+
+    const canvas = await html2canvas(targetElement, {
+      backgroundColor: null,
+      scale: 2,
+      logging: false,
+      useCORS: true,
+      allowTaint: true,
+      imageTimeout: 15000,
+    });
+
+    const blob = await new Promise<Blob | null>((resolve) => {
+      canvas.toBlob(
+        (result) => {
+          resolve(result);
+        },
+        'image/png'
+      );
+    });
+
+    return blob;
+  } catch (error) {
+    // Suppress oklab parsing errors - they're non-critical
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    if (!errorMessage.includes('oklab') && !errorMessage.includes('oklch')) {
+      // eslint-disable-next-line no-console
+      console.error('Error capturing element to PNG:', error);
+    }
+    return null;
+  } finally {
+    // Restore original styles
+    if (restoreStyles) {
+      restoreStyles();
+    }
+  }
+}
+
 

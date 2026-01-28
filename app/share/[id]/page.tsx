@@ -1,79 +1,16 @@
 'use client';
 
+import { captureElementToPngBlob, downloadImage, shareImage } from '@/lib/share/share-utils';
 import { useEffect, useRef, useState } from 'react';
-import { useParams } from 'next/navigation';
-import html2canvas from 'html2canvas';
-import { ShareCard } from '@/components/share/ShareCard';
-import { getAttemptById } from '@/lib/persistence/indexeddb';
-import { shareImage, downloadImage } from '@/lib/share/share-utils';
-import type { SmileAttempt } from '@/types/leaderboard';
-import type { LuxandFaceRegion } from '@/types/luxand-api';
+
 import { Button } from '@/components/ui/Button';
-
-// Helper function to ensure explicit RGB color values for html2canvas compatibility
-// html2canvas has issues with oklab/oklch colors, so we set explicit RGB values from computed styles
-const prepareElementForCanvas = (element: HTMLElement) => {
-  const walker = document.createTreeWalker(
-    element,
-    NodeFilter.SHOW_ELEMENT,
-    null
-  );
-
-  const elements: HTMLElement[] = [element];
-  let node: Node | null = walker.nextNode();
-  while (node) {
-    if (node instanceof HTMLElement) {
-      elements.push(node);
-    }
-    node = walker.nextNode();
-  }
-
-  const originalStyles: Map<HTMLElement, { [key: string]: string }> = new Map();
-
-  elements.forEach((el) => {
-    const computedStyle = window.getComputedStyle(el);
-    const styleToRestore: { [key: string]: string } = {};
-
-    // Set explicit RGB values for color properties to help html2canvas
-    const colorProperties = [
-      'color',
-      'backgroundColor',
-      'borderColor',
-      'borderTopColor',
-      'borderRightColor',
-      'borderBottomColor',
-      'borderLeftColor',
-    ];
-
-    colorProperties.forEach((prop) => {
-      const computedValue = computedStyle.getPropertyValue(prop);
-      // Only set if we have a valid color value (not transparent/initial)
-      if (computedValue && computedValue !== 'transparent' && computedValue !== 'rgba(0, 0, 0, 0)') {
-        const currentStyle = el.style.getPropertyValue(prop);
-        styleToRestore[prop] = currentStyle;
-        // Set the computed RGB value explicitly
-        el.style.setProperty(prop, computedValue, 'important');
-      }
-    });
-
-    if (Object.keys(styleToRestore).length > 0) {
-      originalStyles.set(el, styleToRestore);
-    }
-  });
-
-  return () => {
-    // Restore original styles
-    originalStyles.forEach((styles, el) => {
-      Object.entries(styles).forEach(([prop, value]) => {
-        if (value) {
-          el.style.setProperty(prop, value);
-        } else {
-          el.style.removeProperty(prop);
-        }
-      });
-    });
-  };
-};
+import { GameShareCard } from '@/components/share/GameShareCard';
+import type { LuxandFaceRegion } from '@/types/luxand-api';
+import type { SmileAttempt } from '@/types/leaderboard';
+import { getActivity } from '@/lib/api/pepsometer-api';
+import { getAttemptById } from '@/lib/persistence/indexeddb';
+import { getShareUrl } from '@/lib/share/share-utils';
+import { useParams } from 'next/navigation';
 
 export default function SharePage() {
   const params = useParams();
@@ -81,8 +18,10 @@ export default function SharePage() {
   const [attempt, setAttempt] = useState<SmileAttempt | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [hasShared, setHasShared] = useState(false);
-  const [isGenerating, setIsGenerating] = useState(false);
-  const shareCardRef = useRef<HTMLDivElement>(null);
+  const [isSharing, setIsSharing] = useState(false);
+  const [isDownloading, setIsDownloading] = useState(false);
+  // Ref to the outer card frame rendered by GameShareCard
+  const shareCardRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
     const loadAttempt = async () => {
@@ -92,27 +31,55 @@ export default function SharePage() {
       }
 
       try {
-        // First, try to fetch from API (works across devices)
+        // First, try to fetch from Pepsometer API (works across devices)
         try {
-          const response = await fetch(`/api/attempts/${attemptId}`, {
-            method: 'GET',
-            headers: {
-              'Content-Type': 'application/json',
-            },
-            cache: 'no-store',
-          });
+          const apiRes = await getActivity(attemptId);
+          if (apiRes?.status && apiRes.data) {
+            const data = apiRes.data;
+            console.log('apiRes', data);
 
-          if (response.ok) {
-            const apiAttempt = await response.json();
-            // Transform API response to SmileAttempt format if needed
-            if (apiAttempt) {
-              setAttempt(apiAttempt as SmileAttempt);
-              setIsLoading(false);
-              return;
-            }
+            const rawScore = (data as { score?: unknown; pepsometer_score?: unknown }).score ??
+              (data as { pepsometer_score?: unknown }).pepsometer_score;
+
+            const score =
+              typeof rawScore === 'number'
+                ? rawScore
+                : typeof rawScore === 'string'
+                  ? Number.parseFloat(rawScore)
+                  : 0;
+
+            // Map player details from backend response
+            const player = (data as { player?: unknown }).player as
+              | {
+                  first_name?: string;
+                  last_name?: string;
+                  email?: string;
+                  phone_number?: string;
+                  gender?: string;
+                }
+              | undefined;
+
+            const apiAttempt: SmileAttempt = {
+              id: attemptId,
+              remoteId: attemptId,
+              email: player?.email || '',
+              firstName: player?.first_name || '',
+              lastName: player?.last_name || '',
+              phone: player?.phone_number || '',
+              gender: player?.gender || '',
+              // Normalized numeric score (backend may send string)
+              score: Number.isFinite(score) ? score : 0,
+              timestamp: Date.now(),
+              // Used as <img src>; backend provides a URL
+              imageData: (data as { image_url?: string }).image_url ?? undefined,
+            };
+
+            setAttempt(apiAttempt);
+            setIsLoading(false);
+            return;
           }
         } catch (apiError) {
-          console.warn('Failed to fetch from API, trying IndexedDB:', apiError);
+          console.warn('Failed to fetch activity from API, trying IndexedDB:', apiError);
         }
 
         // Fallback to IndexedDB (only works on same device/browser)
@@ -132,158 +99,64 @@ export default function SharePage() {
     loadAttempt();
   }, [attemptId]);
 
-  // Auto-trigger share after a short delay (allows page to render)
-  useEffect(() => {
-    if (attempt && !hasShared && shareCardRef.current) {
-      const timer = setTimeout(() => {
-        handleShare();
-      }, 1000); // 1 second delay to ensure card is rendered
-
-      return () => clearTimeout(timer);
-    }
-  }, [attempt, hasShared]);
-
   const handleShare = async () => {
-    if (!shareCardRef.current || !attempt) return;
+    if (!attempt || !shareCardRef.current) return;
 
-    setIsGenerating(true);
-    let restoreStyles: (() => void) | null = null;
-    
+    setIsSharing(true);
     try {
-      // Find the actual card element
-      const cardElement = shareCardRef.current.querySelector('div > div') as HTMLElement;
-      const targetElement = cardElement || shareCardRef.current;
-      
-      // Wait for all images to load
-      const images = targetElement.querySelectorAll('img');
-      await Promise.all(
-        Array.from(images).map(
-          (img) =>
-            new Promise<void>((resolve) => {
-              if (img.complete) {
-                resolve();
-              } else {
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-              }
-            })
-        )
-      );
-      
-      // Small delay to ensure rendering is complete
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      
-      // Ensure explicit RGB color values for html2canvas compatibility
-      restoreStyles = prepareElementForCanvas(targetElement);
-      
-      const canvas = await html2canvas(targetElement, {
-        backgroundColor: null,
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        imageTimeout: 15000,
-      });
+      const shareUrl = getShareUrl(attempt.id);
+      const title = `I scored ${Math.round(attempt.score)} on the Pepso-Meter! 😊`;
+      const text = `Check out my Pepso Confidence Score! Can you beat ${Math.round(attempt.score)}?`;
 
-      canvas.toBlob(async (blob) => {
-        if (blob) {
-          const shared = await shareImage(
-            blob,
-            `I scored ${Math.round(attempt.score)} on the Pepso-Meter! 😊`,
-            `Check out my Pepso Confidence Score! Can you beat ${Math.round(attempt.score)}?`
-          );
-          if (shared) {
-            setHasShared(true);
-          }
+      // Try to capture the GameShareCard frame as an image and share it
+      const blob = await captureElementToPngBlob(shareCardRef.current);
+
+      if (blob) {
+        const shared = await shareImage(blob, title, text);
+        if (shared) {
+          setHasShared(true);
+          return;
         }
-      }, 'image/png');
+      }
+
+      // Fallbacks: if image sharing failed or not supported, try URL sharing
+      if (navigator.share) {
+        await navigator.share({ title, text, url: shareUrl });
+        setHasShared(true);
+        return;
+      }
+
+      // Final fallback: copy URL to clipboard
+      if (navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText(shareUrl);
+        setHasShared(true);
+      }
     } catch (error) {
-      // Suppress oklab parsing errors - they're non-critical
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (!errorMessage.includes('oklab') && !errorMessage.includes('oklch')) {
+      if ((error as Error).name !== 'AbortError') {
         console.error('Error sharing:', error);
       }
     } finally {
-      // Restore original styles
-      if (restoreStyles) {
-        restoreStyles();
-      }
-      setIsGenerating(false);
+      setIsSharing(false);
     }
   };
 
   const handleDownload = async () => {
     if (!shareCardRef.current || !attempt) return;
 
-    setIsGenerating(true);
-    let restoreStyles: (() => void) | null = null;
-    
-    try {
-      // Find the actual card element
-      const cardElement = shareCardRef.current.querySelector('div > div') as HTMLElement;
-      const targetElement = cardElement || shareCardRef.current;
-      
-      // Wait for all images to load
-      const images = targetElement.querySelectorAll('img');
-      await Promise.all(
-        Array.from(images).map(
-          (img) =>
-            new Promise<void>((resolve) => {
-              if (img.complete) {
-                resolve();
-              } else {
-                img.onload = () => resolve();
-                img.onerror = () => resolve();
-              }
-            })
-        )
-      );
-      
-      // Small delay to ensure rendering is complete
-      await new Promise((resolve) => setTimeout(resolve, 100));
-      
-      // Ensure explicit RGB color values for html2canvas compatibility
-      restoreStyles = prepareElementForCanvas(targetElement);
-      
-      const canvas = await html2canvas(targetElement, {
-        backgroundColor: null,
-        scale: 2,
-        logging: false,
-        useCORS: true,
-        allowTaint: true,
-        imageTimeout: 15000,
-      });
+    setIsDownloading(true);
 
-      canvas.toBlob((blob) => {
-        if (blob) {
-          downloadImage(blob, `pepsodent-smile-${attempt.score}.png`);
-        }
-      }, 'image/png');
+    try {
+      const blob = await captureElementToPngBlob(shareCardRef.current);
+
+      if (blob) {
+        downloadImage(blob, `pepsodent-smile-${attempt.score}.png`);
+      }
     } catch (error) {
-      // Suppress oklab parsing errors - they're non-critical
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (!errorMessage.includes('oklab') && !errorMessage.includes('oklch')) {
-        console.error('Error downloading:', error);
-      }
+      console.error('Error downloading:', error);
     } finally {
-      // Restore original styles
-      if (restoreStyles) {
-        restoreStyles();
-      }
-      setIsGenerating(false);
+      setIsDownloading(false);
     }
   };
-
-  // Get face region from attempt if available (we'll need to store this)
-  // For now, we'll use a default region
-  const faceRegion: LuxandFaceRegion | undefined = attempt
-    ? {
-        x: 0,
-        y: 0,
-        w: 1080,
-        h: 1080,
-      }
-    : undefined;
 
   if (isLoading) {
     return (
@@ -328,13 +201,13 @@ export default function SharePage() {
         </div>
 
         {/* Share Card */}
-        <div ref={shareCardRef} className="flex justify-center bg-white rounded-2xl shadow-xl p-4">
-          <div className="w-full max-w-[500px]">
-            <ShareCard
-              imageData={attempt.imageData || ''}
-              score={attempt.score}
-              firstName={attempt.firstName}
-              faceRegion={faceRegion}
+        <div className="flex justify-center bg-white rounded-2xl shadow-xl p-4">
+          <div className="w-full max-w-[500px] flex justify-center">
+            <GameShareCard
+              ref={shareCardRef}
+              userImageSrc={attempt.imageData || ''}
+              // GameShareCard expects a number; backend score may be string, but we normalized it
+              score={Number.isFinite(attempt.score) ? attempt.score : Number(attempt.score) || 0}
               className="w-full"
             />
           </div>
@@ -346,19 +219,19 @@ export default function SharePage() {
             variant="primary"
             size="lg"
             onClick={handleShare}
-            disabled={isGenerating}
+            disabled={isSharing}
             className="flex-1"
           >
-            {isGenerating ? 'Preparing...' : hasShared ? 'Share Again' : 'Tap to Share'}
+            {isSharing ? 'Preparing...' : hasShared ? 'Share Again' : 'Tap to Share'}
           </Button>
           <Button
             variant="accent"
             size="lg"
             onClick={handleDownload}
-            disabled={isGenerating}
+            disabled={isDownloading}
             className="flex-1"
           >
-            {isGenerating ? 'Generating...' : 'Download Image'}
+            {isDownloading ? 'Generating...' : 'Download Image'}
           </Button>
         </div>
 

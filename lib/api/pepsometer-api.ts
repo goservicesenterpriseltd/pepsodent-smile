@@ -26,6 +26,14 @@ export type ListLocationsResponse = {
   data: PepsometerLocation[];
 };
 
+export type PepsometerActivityData = {
+  id?: string | number;
+  score?: number | null;
+  image_base64?: string | null;
+  // Allow arbitrary extra fields from upstream without strict typing
+  [key: string]: unknown;
+};
+
 export type SubmitActivityPayload = {
   location_id: number;
   email: string | null;
@@ -41,7 +49,13 @@ export type SubmitActivityPayload = {
 export type SubmitActivityResponse = {
   status: boolean;
   message: string;
-  data?: unknown;
+  data?: PepsometerActivityData;
+};
+
+export type GetActivityResponse = {
+  status: boolean;
+  message: string;
+  data?: PepsometerActivityData;
 };
 
 export class PepsometerApiError extends Error {
@@ -199,6 +213,28 @@ export async function submitActivity(payload: SubmitActivityPayload): Promise<Su
     throw new PepsometerApiError(
       response.status,
       `Pepsometer /submit failed: ${response.status} ${response.statusText}`,
+      json
+    );
+  }
+
+  return json;
+}
+
+export async function getActivity(activityId: string): Promise<GetActivityResponse> {
+  const url = new URL(`${PROXY_BASE_PATH}/get_activity/${activityId}`, 'http://localhost');
+
+  const response = await fetch(url.pathname + url.search, {
+    method: 'GET',
+    headers: { 'Content-Type': 'application/json' },
+    cache: 'no-store',
+  });
+
+  const json = await parseJsonSafe<GetActivityResponse>(response);
+
+  if (!response.ok) {
+    throw new PepsometerApiError(
+      response.status,
+      `Pepsometer /get_activity failed: ${response.status} ${response.statusText}`,
       json
     );
   }
