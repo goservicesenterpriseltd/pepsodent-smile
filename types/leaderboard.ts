@@ -8,6 +8,8 @@ export interface SmileAttempt {
   score: number; // 0-100
   timestamp: number;
   imageData?: string; // Base64 encoded image data
+  /** Backend remote ID from Pepsometer API, used for cross-device sharing */
+  remoteId?: string;
 }
 
 export interface LeaderboardEntry {

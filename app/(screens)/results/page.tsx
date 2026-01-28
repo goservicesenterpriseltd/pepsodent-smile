@@ -18,6 +18,7 @@ import { locationStore } from '@/stores/LocationStore';
 import { luxandAPIStore } from '@/stores/LuxandAPIStore';
 import { observer } from 'mobx-react-lite';
 import { submitActivity } from '@/lib/api/pepsometer-api';
+import { updateAttemptRemoteId } from '@/lib/persistence/indexeddb';
 import { toastStore } from '@/stores/ToastStore';
 import { uiStore } from '@/stores/UIStore';
 import { userStore } from '@/stores/UserStore';
@@ -28,6 +29,7 @@ export default observer(function ResultsPage() {
   const [attemptCount, setAttemptCount] = useState(0);
   const [currentAttempt, setCurrentAttempt] = useState<SmileAttempt | null>(null);
   const [showShareModal, setShowShareModal] = useState(false);
+  const [remoteId, setRemoteId] = useState<string | null>(null);
   const savedScoreIdRef = useRef<string | null>(null);
   const submittedScoreIdRef = useRef<string | null>(null);
 
@@ -208,6 +210,24 @@ export default observer(function ResultsPage() {
         throw new Error(res?.message || 'Sync failed');
       }
 
+      // Store backend remote ID (from data.id) for sharing
+      const remoteIdValue =
+        (res.data && typeof res.data.id !== 'undefined' && res.data.id !== null
+          ? String(res.data.id)
+          : null);
+      if (remoteIdValue) {
+        setRemoteId(remoteIdValue);
+        // Persist remoteId into the saved attempt in IndexedDB so leaderboard shares work
+        if (currentAttempt) {
+          await updateAttemptRemoteId(currentAttempt.id, remoteIdValue);
+          // Also update local state so ShareModal uses the latest attempt shape
+          setCurrentAttempt({
+            ...currentAttempt,
+            remoteId: remoteIdValue,
+          });
+        }
+      }
+
       setSyncState('success');
       toastStore.success('Synced successfully.');
     } catch (e) {
@@ -360,7 +380,7 @@ export default observer(function ResultsPage() {
               <div className="text-xs mt-1 break-words">{syncError}</div>
             </div>
           )}
-          {currentAttempt && (
+          {currentAttempt && remoteId && (
             <Button
               variant="primary"
               size="lg"
@@ -380,9 +400,10 @@ export default observer(function ResultsPage() {
       </div>
 
       {/* Share Modal */}
-      {currentAttempt && (
+      {currentAttempt && remoteId && (
         <ShareModal
           attempt={currentAttempt}
+          remoteId={remoteId}
           faceRegion={luxandAPIStore.apiResponse?.faces?.[0]?.region}
           isOpen={showShareModal}
           onClose={() => setShowShareModal(false)}
