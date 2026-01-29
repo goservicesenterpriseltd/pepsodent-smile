@@ -298,7 +298,7 @@ export default observer(function LeaderboardPage() {
                   </div>
 
                   {/* Share Button */}
-                  {/* <div className="flex-shrink-0">
+                  <div className="flex-shrink-0">
                     <button
                       onClick={() => handleShare(entry)}
                       className="w-10 h-10 flex items-center justify-center bg-black hover:bg-gray-800 text-white rounded-lg transition-colors shadow-md hover:shadow-lg"
@@ -320,7 +320,7 @@ export default observer(function LeaderboardPage() {
                         />
                       </svg>
                     </button>
-                  </div> */}
+                  </div>
                 </div>
               );
             })}

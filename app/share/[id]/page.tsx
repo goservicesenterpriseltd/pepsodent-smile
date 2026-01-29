@@ -1,15 +1,15 @@
 'use client';
 
-import { captureElementToPngBlob, downloadImage, shareImage } from '@/lib/share/share-utils';
+import { captureElementToPngBlob, downloadImage, isIOS, shareImage } from '@/lib/share/share-utils';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { GameShareCard } from '@/components/share/GameShareCard';
-import type { LuxandFaceRegion } from '@/types/luxand-api';
 import type { SmileAttempt } from '@/types/leaderboard';
 import { getActivity } from '@/lib/api/pepsometer-api';
 import { getAttemptById } from '@/lib/persistence/indexeddb';
 import { getShareUrl } from '@/lib/share/share-utils';
+import { toastStore } from '@/stores/ToastStore';
 import { useParams } from 'next/navigation';
 
 export default function SharePage() {
@@ -20,8 +20,13 @@ export default function SharePage() {
   const [hasShared, setHasShared] = useState(false);
   const [isSharing, setIsSharing] = useState(false);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [isIOSDevice, setIsIOSDevice] = useState(false);
   // Ref to the outer card frame rendered by GameShareCard
   const shareCardRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setIsIOSDevice(isIOS());
+  }, []);
 
   useEffect(() => {
     const loadAttempt = async () => {
@@ -112,7 +117,7 @@ export default function SharePage() {
       const blob = await captureElementToPngBlob(shareCardRef.current);
 
       if (blob) {
-        const shared = await shareImage(blob, title, text);
+        const shared = await shareImage(blob, title, text, shareUrl);
         if (shared) {
           setHasShared(true);
           return;
@@ -141,18 +146,24 @@ export default function SharePage() {
   };
 
   const handleDownload = async () => {
+    console.log('handleDownloadImage', shareCardRef.current);
     if (!shareCardRef.current || !attempt) return;
 
     setIsDownloading(true);
 
+
     try {
       const blob = await captureElementToPngBlob(shareCardRef.current);
 
-      if (blob) {
-        downloadImage(blob, `pepsodent-smile-${attempt.score}.png`);
+      if (!blob) {
+        toastStore.error('Could not generate image. Please try again.');
+        return;
       }
+
+      downloadImage(blob, `pepsodent-smile-${attempt.score}.png`);
     } catch (error) {
       console.error('Error downloading:', error);
+      toastStore.error('Download failed. Please try again.');
     } finally {
       setIsDownloading(false);
     }
@@ -224,15 +235,17 @@ export default function SharePage() {
           >
             {isSharing ? 'Preparing...' : hasShared ? 'Share Again' : 'Tap to Share'}
           </Button>
-          <Button
-            variant="accent"
-            size="lg"
-            onClick={handleDownload}
-            disabled={isDownloading}
-            className="flex-1"
-          >
-            {isDownloading ? 'Generating...' : 'Download Image'}
-          </Button>
+          {!isIOSDevice && (
+            <Button
+              variant="accent"
+              size="lg"
+              onClick={handleDownload}
+              disabled={isDownloading}
+              className="flex-1"
+            >
+              {isDownloading ? 'Generating...' : 'Download Image'}
+            </Button>
+          )}
         </div>
 
         {/* Info */}

@@ -61,6 +61,8 @@ export async function updateAttemptRemoteId(id: string, remoteId: string): Promi
   const attempt = await db.get('attempts', id);
   if (!attempt) return;
 
+  console.log('attempt', attempt);
+
   const updated: SmileAttempt = {
     ...attempt,
     remoteId,
