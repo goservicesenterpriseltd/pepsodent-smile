@@ -135,13 +135,41 @@ export function isIOS(): boolean {
 
 /**
  * Detect if the current device is a mobile device (iOS, Android, or other mobile browsers).
+ * This function relies on user agent detection and device capabilities, NOT viewport size,
+ * to avoid false positives from desktop browsers with resized windows.
  */
 export function isMobile(): boolean {
   if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+  
   const ua = navigator.userAgent || navigator.vendor || '';
-  // Check for mobile devices
-  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
-  return mobileRegex.test(ua) || (window.innerWidth <= 768 && window.innerHeight <= 1024);
+  
+  // Explicit desktop user agents - exclude these first
+  const desktopRegex = /Windows NT|Macintosh|Linux|X11/i;
+  const isDesktopUA = desktopRegex.test(ua);
+  
+  // Explicit mobile user agents
+  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS|FxiOS/i;
+  const isMobileUA = mobileRegex.test(ua);
+  
+  // If we have a clear mobile user agent, it's mobile
+  if (isMobileUA) return true;
+  
+  // If we have a clear desktop user agent, it's NOT mobile (even if window is small)
+  if (isDesktopUA) return false;
+  
+  // For ambiguous cases, check device capabilities
+  // Check for touch capability (but not all touch devices are mobile - some laptops have touchscreens)
+  const hasTouch = 'ontouchstart' in window || (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints! > 0;
+  
+  // Check if it's a tablet (iPadOS in desktop mode can be tricky)
+  const isTablet = /iPad/.test(ua) || 
+    (navigator.platform === 'MacIntel' && (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints! > 1);
+  
+  // If it has touch AND looks like a tablet, it's mobile
+  if (hasTouch && isTablet) return true;
+  
+  // Default: if we can't determine, assume desktop (safer to allow access)
+  return false;
 }
 
 /**
