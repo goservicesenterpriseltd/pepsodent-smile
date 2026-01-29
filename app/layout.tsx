@@ -1,9 +1,11 @@
-import type { Metadata } from "next";
-import { Geist, Geist_Mono, Fredoka, Poppins } from "next/font/google";
 import "./globals.css";
-import { ToastContainer } from "@/components/ui/Toast";
+
+import { Fredoka, Geist, Geist_Mono, Poppins } from "next/font/google";
+
 import { LocationPickerFab } from "@/components/location/LocationPickerFab";
+import type { Metadata } from "next";
 import { MobileRouteGuard } from "@/components/ui/MobileRouteGuard";
+import { ToastContainer } from "@/components/ui/Toast";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -43,11 +45,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} ${poppins.variable} antialiased`}
       >
-        <MobileRouteGuard>
-          {children}
-          <ToastContainer />
-          <LocationPickerFab />
-        </MobileRouteGuard>
+        {children}
+        <ToastContainer />
+        <LocationPickerFab />
+        {/* <MobileRouteGuard>
+          
+        </MobileRouteGuard> */}
       </body>
     </html>
   );
