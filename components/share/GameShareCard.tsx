@@ -18,8 +18,6 @@
  * @component
  */
 
-import Image from 'next/image';
-import { Logo } from '../ui/Logo';
 import { forwardRef } from 'react';
 
 interface GameShareCardProps {
@@ -49,9 +47,13 @@ export const GameShareCard = forwardRef<HTMLDivElement, GameShareCardProps>(
   // Normalize user image from base64 (or existing data URL) – no state/effects needed
   const hasUserImage = Boolean(userImageSrc);
   const userImageUrl = hasUserImage
-    ? userImageSrc.startsWith('data:')
-      ? userImageSrc
-      : `data:image/jpeg;base64,${userImageSrc}`
+    ? userImageSrc.startsWith('/9')
+      ? `data:image/jpeg;base64,${userImageSrc}`
+      : userImageSrc.startsWith('data:')
+        ? userImageSrc
+        : userImageSrc.startsWith('http://') || userImageSrc.startsWith('https://')
+          ? `/api/image-proxy?url=${encodeURIComponent(userImageSrc)}`
+          : userImageSrc
     : '';
 
   // Calculate rounded score for display
@@ -78,15 +80,12 @@ export const GameShareCard = forwardRef<HTMLDivElement, GameShareCardProps>(
         ============================================
       */}
 
-      {/* SVG background image */}
-      <Image
+      {/* Background image using plain <img> for better compatibility with html-to-image, especially on iOS */}
+      <img
         src="/layered-waves-haikei.svg"
         alt=""
-        fill
         className="absolute inset-0 w-full h-full object-cover"
         aria-hidden="true"
-        priority
-        unoptimized
       />
 
       {/* Decorative blob - Top Right */}
@@ -101,13 +100,17 @@ export const GameShareCard = forwardRef<HTMLDivElement, GameShareCardProps>(
         style={{ zIndex: 1 }}
       />
 
-      {/* Logo */}
+      {/* Logo (plain <img> instead of Next Image for better capture support) */}
       <div className="absolute w-56 h-36 flex items-center justify-center rounded-br-full top-0 left-0 z-10">
-        <Logo width={180} height={168} />
+        <img
+          src="/logo.png"
+          alt="Pepsodent Logo"
+          className="max-w-[180px] max-h-[168px] object-contain"
+        />
       </div>
 
       <div className='relative w-full h-full flex flex-col gap-4 justify-center items-center'>
-        <div className='w-56 h-56 rounded-lg flex bg-red-600'>
+        <div className="w-56 h-56 rounded-lg flex bg-red-600">
           <div className="relative w-full h-full">
             {/* Glow effect behind avatar */}
             <div className="absolute inset-0 bg-white/30 rounded-lg blur-xl scale-105" />
@@ -115,13 +118,11 @@ export const GameShareCard = forwardRef<HTMLDivElement, GameShareCardProps>(
             {/* Avatar container with white border */}
             <div className="relative w-full h-full rounded-lg border-4 border-white overflow-hidden shadow-2xl">
               {userImageUrl ? (
-                <Image
+                <img
                   src={userImageUrl}
                   alt="User"
                   className="w-full h-full object-cover"
-                  fill
                   style={{ objectPosition: 'center center' }}
-                  unoptimized
                 />
               ) : (
                 <div className="w-full h-full bg-gradient-to-br from-gray-400 to-gray-600 flex items-center justify-center">
@@ -131,7 +132,7 @@ export const GameShareCard = forwardRef<HTMLDivElement, GameShareCardProps>(
             </div>
           </div>
         </div>
-        <div className="w-56 h-28 p-2 px-5 flex flex-col  bg-white border border-white rounded-lg ">
+        <div className="w-56 h-28 p-2 px-5 flex flex-col bg-white border border-white rounded-lg ">
           <p
             className="text-black text-sm font-medium font-[var(--font-poppins)]"
             style={{
@@ -142,7 +143,7 @@ export const GameShareCard = forwardRef<HTMLDivElement, GameShareCardProps>(
           </p>
           {/* Large Score Number */}
           <div
-            className="text-white font-bold font-[var(--font-fredoka)]"
+            className="text-black font-bold font-[var(--font-fredoka)]"
             style={{
               fontSize: '64px',
               lineHeight: '1',

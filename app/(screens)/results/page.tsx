@@ -4,7 +4,6 @@ import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import { CelebrationConfetti } from '@/components/confetti/CelebrationConfetti';
-import Image from 'next/image';
 import { Logo } from '@/components/ui/Logo';
 import { PepsometerApiError } from '@/lib/api/pepsometer-api';
 import type { PersonalizedResponse } from '@/types/responses';
@@ -18,9 +17,9 @@ import { locationStore } from '@/stores/LocationStore';
 import { luxandAPIStore } from '@/stores/LuxandAPIStore';
 import { observer } from 'mobx-react-lite';
 import { submitActivity } from '@/lib/api/pepsometer-api';
-import { updateAttemptRemoteId } from '@/lib/persistence/indexeddb';
 import { toastStore } from '@/stores/ToastStore';
 import { uiStore } from '@/stores/UIStore';
+import { updateAttemptRemoteId } from '@/lib/persistence/indexeddb';
 import { userStore } from '@/stores/UserStore';
 
 export default observer(function ResultsPage() {
@@ -35,6 +34,32 @@ export default observer(function ResultsPage() {
 
   const [syncState, setSyncState] = useState<'idle' | 'submitting' | 'success' | 'error'>('idle');
   const [syncError, setSyncError] = useState<string | null>(null);
+
+  // Persist the backend remoteId into the saved attempt once BOTH exist.
+  // This avoids a race where the submit finishes before the attempt is saved / currentAttempt state is set.
+  useEffect(() => {
+    let cancelled = false;
+
+    const persistRemoteId = async () => {
+      if (!remoteId || !currentAttempt) return;
+      if (currentAttempt.remoteId === remoteId) return;
+
+      try {
+        await updateAttemptRemoteId(currentAttempt.id, remoteId);
+        if (!cancelled) {
+          setCurrentAttempt((prev) => (prev ? { ...prev, remoteId } : prev));
+        }
+      } catch (e) {
+        console.error('Failed to persist remoteId to IndexedDB:', e);
+      }
+    };
+
+    persistRemoteId();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [remoteId, currentAttempt]);
 
   useEffect(() => {
     const saveAttemptAndUpdateCount = async () => {
@@ -51,6 +76,13 @@ export default observer(function ResultsPage() {
         savedScoreIdRef.current !== scoreId
       ) {
         savedScoreIdRef.current = scoreId;
+
+        // Reset per-attempt sync/share state (prevents old remoteId being applied to a new attempt)
+        setRemoteId(null);
+        setSyncState('idle');
+        setSyncError(null);
+        setShowShareModal(false);
+        setCurrentAttempt(null);
 
         const personalized = getPersonalizedResponse(
           luxandAPIStore.smileScore.score,
@@ -217,15 +249,7 @@ export default observer(function ResultsPage() {
           : null);
       if (remoteIdValue) {
         setRemoteId(remoteIdValue);
-        // Persist remoteId into the saved attempt in IndexedDB so leaderboard shares work
-        if (currentAttempt) {
-          await updateAttemptRemoteId(currentAttempt.id, remoteIdValue);
-          // Also update local state so ShareModal uses the latest attempt shape
-          setCurrentAttempt({
-            ...currentAttempt,
-            remoteId: remoteIdValue,
-          });
-        }
+        console.log('got value for remoteId', remoteIdValue);
       }
 
       setSyncState('success');

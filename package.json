@@ -4,6 +4,8 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:webpack": "next dev --webpack",
+    "dev:turbo": "next dev --turbo",
     "build": "next build",
     "start": "next start",
     "lint": "eslint"
@@ -16,7 +18,7 @@
     "@tensorflow/tfjs-core": "^4.22.0",
     "canvas-confetti": "^1.9.4",
     "framer-motion": "^12.23.26",
-    "html2canvas": "^1.4.1",
+    "html-to-image": "^1.11.11",
     "idb": "^8.0.3",
     "mobx": "^6.15.0",
     "mobx-react-lite": "^4.1.1",

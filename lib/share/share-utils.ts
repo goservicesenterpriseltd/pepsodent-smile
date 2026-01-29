@@ -1,4 +1,4 @@
-import html2canvas from 'html2canvas';
+import * as htmlToImage from 'html-to-image';
 
 /**
  * Get the base URL for share links
@@ -68,55 +68,107 @@ export function base64ToImage(base64: string): Promise<HTMLImageElement> {
 export async function shareImage(
   imageBlob: Blob,
   title: string,
-  text: string
+  text: string,
+  url?: string
 ): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !navigator.share) {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') {
     return false;
   }
+
+  const shareUrl =
+    url ||
+    (typeof window !== 'undefined'
+      ? window.location.href
+      : undefined);
 
   try {
     const file = new File([imageBlob], 'pepsodent-smile-score.png', {
       type: 'image/png',
     });
 
-    if (navigator.canShare && navigator.canShare({ files: [file] })) {
-      await navigator.share({
+    // First, try sharing with the image file attached.
+    try {
+      await (navigator as Navigator & { share(data: ShareData & { files?: File[] }): Promise<void> }).share({
         title,
         text,
         files: [file],
       });
       return true;
-    } else {
-      // Fallback: share URL only
-      await navigator.share({
-        title,
-        text,
-        url: window.location.href,
-      });
-      return true;
+    } catch (err: unknown) {
+      const error = err as Error;
+      if (error.name === 'AbortError') {
+        // User cancelled share – don't treat as failure, just stop.
+        return false;
+      }
+
+      // If file sharing isn't supported, fall back to URL-only share (if we have a URL).
+      if (shareUrl && typeof navigator.share === 'function') {
+        await (navigator as Navigator).share({
+          title,
+          text,
+          url: shareUrl,
+        });
+        return true;
+      }
+
+      // If there is no URL to fall back to, rethrow so outer catch logs it.
+      throw error;
     }
-  } catch (error) {
-    if ((error as Error).name === 'AbortError') {
-      // User cancelled share
-      return false;
-    }
-    console.error('Error sharing image:', error);
+  } catch (error: unknown) {
+    // eslint-disable-next-line no-console
+    console.error('Error sharing image:', error instanceof Error ? error.message : String(error));
     return false;
   }
 }
 
 /**
- * Download image as PNG
+ * Very small user agent helper to detect iOS (including iPadOS in desktop mode).
+ */
+export function isIOS(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || '';
+  const iOS = /iPad|iPhone|iPod/.test(ua);
+  const iPadOSDesktop =
+    !iOS && navigator.platform === 'MacIntel' && (navigator as Navigator & { maxTouchPoints?: number }).maxTouchPoints! > 1;
+  return iOS || iPadOSDesktop;
+}
+
+/**
+ * Detect if the current device is a mobile device (iOS, Android, or other mobile browsers).
+ */
+export function isMobile(): boolean {
+  if (typeof navigator === 'undefined' || typeof window === 'undefined') return false;
+  const ua = navigator.userAgent || navigator.vendor || '';
+  // Check for mobile devices
+  const mobileRegex = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini|Mobile|mobile|CriOS/i;
+  return mobileRegex.test(ua) || (window.innerWidth <= 768 && window.innerHeight <= 1024);
+}
+
+/**
+ * Download image as PNG.
+ *
+ * Note: iOS Safari has limited support for programmatic downloads with the `download` attribute.
+ * For iOS, we open the image in a new tab so the user can long‑press and save it.
  */
 export function downloadImage(blob: Blob, filename: string = 'pepsodent-smile-score.png'): void {
   const url = URL.createObjectURL(blob);
+
+  if (isIOS()) {
+    // Open in a new tab; user can long‑press to save.
+    window.open(url, '_blank');
+    // Revoke after a short delay to give the new tab time to load.
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+    return;
+  }
+
   const link = document.createElement('a');
   link.href = url;
   link.download = filename;
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  URL.revokeObjectURL(url);
+  // Give the browser a tick to start the download (Safari can drop it if revoked immediately)
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 /**
@@ -187,66 +239,122 @@ const prepareElementForCanvas = (element: HTMLElement) => {
 };
 
 /**
- * Capture a DOM element as a high-quality PNG Blob using html2canvas.
+ * Inline all <img> elements under the target element as data URLs so that
+ * html-to-image can reliably include them in the rendered output (especially on iOS).
+ * Returns a restore function to put the original src values back.
+ */
+async function inlineImagesForCapture(root: HTMLElement): Promise<() => void> {
+  const images = Array.from(root.querySelectorAll('img'));
+  const originalSrcMap = new Map<HTMLImageElement, string>();
+
+  await Promise.all(
+    images.map(async (img) => {
+      const src = img.currentSrc || img.src;
+      if (!src || src.startsWith('data:')) {
+        return;
+      }
+
+      try {
+        const response = await fetch(src);
+        if (!response.ok) return;
+        const blob = await response.blob();
+
+        const dataUrl = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            if (typeof reader.result === 'string') {
+              resolve(reader.result);
+            } else {
+              reject(new Error('Failed to convert image blob to data URL'));
+            }
+          };
+          reader.onerror = () => reject(reader.error ?? new Error('Failed to read image blob'));
+          reader.readAsDataURL(blob);
+        });
+
+        originalSrcMap.set(img, img.src);
+        img.src = dataUrl;
+      } catch {
+        // If inlining fails for a particular image, just leave it as-is.
+      }
+    })
+  );
+
+  return () => {
+    originalSrcMap.forEach((src, img) => {
+      img.src = src;
+    });
+  };
+}
+
+/**
+ * Capture a DOM element as a high-quality PNG Blob using html-to-image.
  * Ensures all images are loaded and colors are compatible before rendering.
  */
 export async function captureElementToPngBlob(targetElement: HTMLElement): Promise<Blob | null> {
-  // Wait for all images to load
-  const images = targetElement.querySelectorAll('img');
-  await Promise.all(
-    Array.from(images).map(
-      (img) =>
-        new Promise<void>((resolve) => {
-          if (img.complete) {
-            resolve();
-          } else {
-            img.onload = () => resolve();
-            img.onerror = () => resolve();
-          }
-        })
-    )
-  );
-
-  // Small delay to ensure rendering is complete
-  await new Promise((resolve) => setTimeout(resolve, 100));
-
   let restoreStyles: (() => void) | null = null;
+  let restoreImages: (() => void) | null = null;
 
   try {
-    // Ensure explicit RGB color values for html2canvas compatibility
+    // On iOS, inline all images as data URLs for more reliable capture.
+    if (isIOS()) {
+      restoreImages = await inlineImagesForCapture(targetElement);
+    }
+
+    // Wait for all images (possibly inlined) to load.
+    const images = targetElement.querySelectorAll('img');
+    await Promise.all(
+      Array.from(images).map(
+        (img) =>
+          new Promise<void>((resolve) => {
+            if (img.complete) {
+              resolve();
+            } else {
+              img.onload = () => resolve();
+              img.onerror = () => resolve();
+            }
+          })
+      )
+    );
+
+    // Small delay to ensure rendering is complete
+    await new Promise((resolve) => setTimeout(resolve, 100));
+
+    // Ensure explicit RGB color values for compatibility
     restoreStyles = prepareElementForCanvas(targetElement);
 
-    const canvas = await html2canvas(targetElement, {
-      backgroundColor: null,
-      scale: 2,
-      logging: false,
-      useCORS: true,
-      allowTaint: true,
-      imageTimeout: 15000,
-    });
-
-    const blob = await new Promise<Blob | null>((resolve) => {
-      canvas.toBlob(
-        (result) => {
-          resolve(result);
-        },
-        'image/png'
-      );
-    });
-
-    return blob;
-  } catch (error) {
-    // Suppress oklab parsing errors - they're non-critical
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    if (!errorMessage.includes('oklab') && !errorMessage.includes('oklch')) {
-      // eslint-disable-next-line no-console
-      console.error('Error capturing element to PNG:', error);
+    // Prefer a Blob directly if available (modern browsers)
+    if ('toBlob' in htmlToImage && typeof (htmlToImage as typeof htmlToImage & { toBlob?: (node: HTMLElement, options?: Parameters<typeof htmlToImage.toPng>[1]) => Promise<Blob | null> }).toBlob === 'function') {
+      const extended = htmlToImage as typeof htmlToImage & {
+        toBlob?: (node: HTMLElement, options?: Parameters<typeof htmlToImage.toPng>[1]) => Promise<Blob | null>;
+      };
+      const blob = await extended.toBlob?.(targetElement, {
+        pixelRatio: 2,
+        cacheBust: true,
+      });
+      return blob as Blob | null;
     }
+
+    // Fallback: use data URL then convert to Blob
+    const dataUrl = await htmlToImage.toPng(targetElement, {
+      pixelRatio: 2,
+      cacheBust: true,
+    });
+
+    const res = await fetch(dataUrl);
+    return await res.blob();
+  } catch (error) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
+    // eslint-disable-next-line no-console
+    console.error('Error capturing element to PNG (html-to-image):', errorMessage);
     return null;
   } finally {
-    // Restore original styles
+    // Restore original styles and image sources
     if (restoreStyles) {
       restoreStyles();
+    }
+    if (restoreImages) {
+      restoreImages();
     }
   }
 }

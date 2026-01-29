@@ -1,16 +1,17 @@
-import { makeAutoObservable, runInAction } from 'mobx';
-import type { SmileAttempt, LeaderboardEntry } from '@/types/leaderboard';
-import type { UserData } from '@/types/user';
-import { saveAttempt, getAllAttempts } from '@/lib/persistence/indexeddb';
-import { aggregateLeaderboard } from '@/lib/leaderboard/aggregation';
-import { getAttemptsForIdentity } from '@/lib/leaderboard/identity';
-import { appConfig } from '@/lib/config/app-config';
-import { toastStore } from './ToastStore';
-import { 
-  fetchLeaderboardFromAPI, 
-  submitAttemptToAPI, 
-  isBackendAPIAvailable 
+import type { LeaderboardEntry, SmileAttempt } from '@/types/leaderboard';
+import {
+  fetchLeaderboardFromAPI,
+  isBackendAPIAvailable,
+  submitAttemptToAPI
 } from '@/lib/api/leaderboard-api';
+import { getAllAttempts, saveAttempt } from '@/lib/persistence/indexeddb';
+import { makeAutoObservable, runInAction } from 'mobx';
+
+import type { UserData } from '@/types/user';
+import { aggregateLeaderboard } from '@/lib/leaderboard/aggregation';
+import { appConfig } from '@/lib/config/app-config';
+import { getAttemptsForIdentity } from '@/lib/leaderboard/identity';
+import { toastStore } from './ToastStore';
 
 class LeaderboardStore {
   attempts: SmileAttempt[] = [];
@@ -35,6 +36,8 @@ class LeaderboardStore {
         return false;
       }
 
+      console.log('Attempt to add:', attempt);
+
       // Save to local storage first
       await saveAttempt(attempt);
       
@@ -44,6 +47,8 @@ class LeaderboardStore {
         this.attempts = updatedAttempts;
         this.updateLeaderboard();
       });
+
+      console.log('got here')
       
       // Try to sync to backend API if available (async, don't wait)
       if (isBackendAPIAvailable()) {
@@ -56,7 +61,8 @@ class LeaderboardStore {
           gender: attempt.gender,
           score: attempt.score,
           timestamp: attempt.timestamp,
-        }).then(() => {
+        }).then((response) => {
+          console.log('Attempt synced to backend API', response);
           console.log('Attempt synced to backend API');
         }).catch((apiError) => {
           console.warn('Failed to sync attempt to backend, keeping local only:', apiError);

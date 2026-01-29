@@ -1,5 +1,6 @@
 'use client';
 
+import { captureElementToPngBlob, downloadImage, getShareUrl, shareImage } from '@/lib/share/share-utils';
 import { useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
@@ -7,7 +8,6 @@ import { GameShareCard } from './GameShareCard';
 import type { LuxandFaceRegion } from '@/types/luxand-api';
 import { QRCodeCanvas } from 'qrcode.react';
 import type { SmileAttempt } from '@/types/leaderboard';
-import { captureElementToPngBlob, downloadImage, getShareUrl, shareImage } from '@/lib/share/share-utils';
 
 interface ShareModalProps {
   attempt: SmileAttempt;
@@ -40,6 +40,7 @@ export function ShareModal({ attempt, remoteId, faceRegion: _faceRegion, isOpen,
   const handleDownloadImage = async () => {
     if (!shareCardRef.current) return;
 
+
     setIsGeneratingImage(true);
 
     try {
@@ -67,7 +68,7 @@ export function ShareModal({ attempt, remoteId, faceRegion: _faceRegion, isOpen,
       const blob = await captureElementToPngBlob(shareCardRef.current);
 
       if (blob) {
-        const shared = await shareImage(blob, title, text);
+        const shared = await shareImage(blob, title, text, shareUrl);
         if (shared) {
           setIsGeneratingImage(false);
           return;
@@ -94,7 +95,7 @@ export function ShareModal({ attempt, remoteId, faceRegion: _faceRegion, isOpen,
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-75 p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
       onClick={(e) => {
         if (e.target === e.currentTarget) {
           onClose();
