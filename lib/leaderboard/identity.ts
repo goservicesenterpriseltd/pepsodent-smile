@@ -1,7 +1,7 @@
 import type { SmileAttempt } from '@/types/leaderboard';
 import type { UserData } from '@/types/user';
 
-type Identity = Partial<Pick<UserData, 'email' | 'phone'>> | SmileAttempt;
+type Identity = Partial<Pick<UserData, 'phone'>> | SmileAttempt;
 
 const normalizeEmail = (email?: string) => {
   const trimmed = email?.trim().toLowerCase();

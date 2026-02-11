@@ -242,4 +242,133 @@ export async function getActivity(activityId: string): Promise<GetActivityRespon
   return json;
 }
 
+export type ActivityData = {
+  id?: string | number;
+  location_id?: number;
+  player_id?: number;
+  image_url?: string | null;
+  score?: number | null;
+  status?: number;
+  created_at?: string;
+  updated_at?: string;
+  [key: string]: unknown;
+};
+
+export type PlayerData = {
+  id?: string | number;
+  first_name?: string | null;
+  other_name?: string | null;
+  last_name?: string | null;
+  email?: string | null;
+  phone_number?: string | null;
+  gender?: string | null;
+  created_at?: string;
+  updated_at?: string;
+  activities_count?: number;
+  activities_avg_score?: number;
+  activities?: ActivityData[];
+  image_url?: string | null;
+  image_base64?: string | null;
+  [key: string]: unknown;
+};
+
+export type PaginatedPlayersResponse = {
+  status: boolean;
+  message?: string;
+  current_page?: number;
+  data?: PlayerData[];
+  first_page_url?: string;
+  from?: number;
+  last_page?: number;
+  last_page_url?: string;
+  next_page_url?: string | null;
+  path?: string;
+  per_page?: number;
+  prev_page_url?: string | null;
+  to?: number;
+  total?: number;
+  [key: string]: unknown;
+};
+
+export type GetPlayersResponse = {
+  status: boolean;
+  message?: string;
+  data?: PlayerData[];
+};
+
+/**
+ * Fetch all players for a location, handling pagination automatically
+ * Starts with 50 records per page, then fetches all remaining pages
+ */
+export async function getPlayers(locationId: number): Promise<GetPlayersResponse> {
+  const allPlayers: PlayerData[] = [];
+  let currentPage = 1;
+  const perPage = 50;
+  let hasMorePages = true;
+  let totalPages = 1;
+
+  console.log('Fetching players with location_id:', locationId, 'starting with page', currentPage);
+
+  while (hasMorePages && currentPage <= totalPages) {
+    const url = new URL(`${PROXY_BASE_PATH}/players`, 'http://localhost');
+    url.searchParams.set('location_id', String(locationId));
+    url.searchParams.set('page', String(currentPage));
+    url.searchParams.set('per_page', String(perPage));
+
+    console.log(`Fetching players page ${currentPage}/${totalPages} from:`, url.pathname + url.search);
+
+    const response = await fetch(url.pathname + url.search, {
+      method: 'GET',
+      headers: { 'Content-Type': 'application/json' },
+      cache: 'no-store',
+    });
+
+    const json = await parseJsonSafe<PaginatedPlayersResponse>(response);
+
+    if (!response.ok) {
+      console.error('getPlayers error response:', {
+        status: response.status,
+        statusText: response.statusText,
+        body: json,
+        page: currentPage,
+      });
+      throw new PepsometerApiError(
+        response.status,
+        `Pepsometer /players failed: ${response.status} ${response.statusText}. ${typeof json === 'object' && json !== null && 'message' in json ? String(json.message) : 'Unknown error'}`,
+        json
+      );
+    }
+
+    // Check if response is paginated
+    if (json.current_page !== undefined && json.data && Array.isArray(json.data)) {
+      // Paginated response
+      allPlayers.push(...json.data);
+      
+      // Update pagination info
+      totalPages = json.last_page || 1;
+      hasMorePages = json.next_page_url !== null && json.next_page_url !== undefined && currentPage < totalPages;
+      
+      console.log(`Fetched page ${currentPage}/${totalPages}: ${json.data.length} players (total so far: ${allPlayers.length})`);
+      
+      currentPage++;
+    } else if (Array.isArray(json.data)) {
+      // Direct array response (non-paginated)
+      allPlayers.push(...json.data);
+      hasMorePages = false;
+      console.log(`Fetched non-paginated response: ${json.data.length} players`);
+    } else {
+      // Unexpected response format
+      console.warn('Unexpected response format:', json);
+      hasMorePages = false;
+    }
+  }
+
+  console.log(`Finished fetching all players: ${allPlayers.length} total players`);
+
+  return {
+    status: true,
+    data: allPlayers,
+  };
+}
+
 

@@ -16,17 +16,14 @@ class UserStore {
 
   get isComplete(): boolean {
     return !!(
-      this.user?.firstName &&
-      this.user?.lastName &&
-      this.user?.phone &&
-      this.user?.email &&
-      this.user?.gender
+      this.user?.name &&
+      this.user?.phone
     );
   }
 
   get fullName(): string {
     if (!this.user) return '';
-    return `${this.user.firstName} ${this.user.lastName}`.trim();
+    return this.user.name.trim();
   }
 
   clearUser() {

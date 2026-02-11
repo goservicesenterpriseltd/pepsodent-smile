@@ -86,8 +86,7 @@ export default observer(function ResultsPage() {
 
         const personalized = getPersonalizedResponse(
           luxandAPIStore.smileScore.score,
-          userStore.user.firstName,
-          userStore.user.gender
+          userStore.user.name
         );
         setResponse(personalized);
 
@@ -110,18 +109,18 @@ export default observer(function ResultsPage() {
         // This ensures we only count attempts where the user saw their score
         const attempt: SmileAttempt = {
           id: `${Date.now()}-${Math.random()}`,
-          email: userStore.user.email || '',
-          firstName: userStore.user.firstName || '',
-          lastName: userStore.user.lastName || '',
+          email: '',
+          firstName: userStore.user.name || '',
+          lastName: '',
           phone: userStore.user.phone || '',
-          gender: userStore.user.gender || '',
+          gender: '',
           score: luxandAPIStore.smileScore.score,
           timestamp: Date.now(),
           imageData: imageData || undefined, // Store base64 image data for leaderboard display
         };
 
         console.log('Saving attempt for user:', {
-          email: userStore.user.email,
+          name: userStore.user.name,
           phone: userStore.user.phone,
           hasImageData: !!imageData,
           imageDataLength: imageData?.length || 0,
@@ -155,9 +154,9 @@ export default observer(function ResultsPage() {
             console.error('Failed to save attempt - addAttempt returned false');
             console.error('LeaderboardStore error:', leaderboardStore.error);
             console.error('User data:', {
-              email: userStore.user.email,
+              name: userStore.user.name,
               phone: userStore.user.phone,
-              hasEmail: !!userStore.user.email,
+              hasName: !!userStore.user.name,
               hasPhone: !!userStore.user.phone,
             });
             // Reset the ref so user can try again if needed
@@ -185,7 +184,7 @@ export default observer(function ResultsPage() {
     cameraStore.stopCamera();
     // Don't clear image here - keep it for leaderboard display and potential retry
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [luxandAPIStore.smileScore?.score, userStore.user?.email]);
+  }, [luxandAPIStore.smileScore?.score, userStore.user?.phone]);
 
   const canSubmitToPepsometer =
     !!userStore.user &&
@@ -224,14 +223,21 @@ export default observer(function ResultsPage() {
     setSyncError(null);
 
     try {
+      // Split name into first_name and last_name for API
+      // If name has multiple words, use first word as first_name, rest as last_name
+      // Otherwise, put entire name in first_name
+      const nameParts = (userStore.user.name || '').trim().split(/\s+/);
+      const first_name = nameParts[0] || null;
+      const last_name = nameParts.length > 1 ? nameParts.slice(1).join(' ') : null;
+
       const payload = {
         location_id: locationStore.selected.id,
-        email: userStore.user.email || null,
+        email: null,
         phone_number: userStore.user.phone || null,
-        first_name: userStore.user.firstName || null,
+        first_name: first_name,
         other_name: null,
-        last_name: userStore.user.lastName || null,
-        gender: userStore.user.gender || null,
+        last_name: last_name,
+        gender: null,
         score: Math.round(luxandAPIStore.smileScore.score),
         image_base64: cameraStore.imageDataBase64,
       };
@@ -277,7 +283,7 @@ export default observer(function ResultsPage() {
     submittedScoreIdRef.current = scoreId;
     submitToPepsometer();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [luxandAPIStore.smileScore?.score, luxandAPIStore.smileScore?.confidence, userStore.user?.email, locationStore.selected?.id]);
+  }, [luxandAPIStore.smileScore?.score, luxandAPIStore.smileScore?.confidence, userStore.user?.phone, locationStore.selected?.id]);
 
   const handlePlayAgain = () => {
     luxandAPIStore.reset();
