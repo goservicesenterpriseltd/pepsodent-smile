@@ -16,9 +16,9 @@ const normalizePhone = (phone?: string) => {
 
 const getIdentityTokens = (identity: Identity): string[] => {
   const tokens: string[] = [];
-  const emailToken = normalizeEmail(identity.email);
+  // const emailToken = normalizeEmail(identity.email);
   const phoneToken = normalizePhone(identity.phone);
-  if (emailToken) tokens.push(emailToken);
+  // if (emailToken) tokens.push(emailToken);
   if (phoneToken) tokens.push(phoneToken);
   return tokens;
 };
