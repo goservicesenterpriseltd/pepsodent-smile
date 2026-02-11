@@ -15,6 +15,7 @@ import { leaderboardStore } from '@/stores/LeaderboardStore';
 import { observer } from 'mobx-react-lite';
 import { toastStore } from '@/stores/ToastStore';
 import { userStore } from '@/stores/UserStore';
+import { locationStore } from '@/stores/LocationStore';
 
 const REFRESH_INTERVAL = appConfig.leaderboardRefreshIntervalMs;
 
@@ -24,23 +25,33 @@ export default observer(function LeaderboardPage() {
   const [isMounted, setIsMounted] = useState(false);
   const [selectedAttempt, setSelectedAttempt] = useState<SmileAttempt | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
+  const [useRemoteAPI, setUseRemoteAPI] = useState(false);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Load function that respects the toggle state
+  const loadLeaderboard = async () => {
+    if (useRemoteAPI && locationStore.selected?.id) {
+      await leaderboardStore.loadFromRemoteAPI(locationStore.selected.id);
+    } else {
+      await leaderboardStore.loadFromStorage();
+    }
+    setLastRefresh(new Date());
+  };
+
   // Track client-side mount to prevent hydration mismatch
   useEffect(() => {
     setIsMounted(true);
-    leaderboardStore.loadFromStorage();
-    setLastRefresh(new Date());
+    locationStore.hydrate();
+    loadLeaderboard();
   }, []);
 
   // Auto-refresh leaderboard
   useEffect(() => {
     refreshIntervalRef.current = setInterval(() => {
       console.log('Auto-refreshing leaderboard...');
-      leaderboardStore.loadFromStorage();
-      setLastRefresh(new Date());
+      loadLeaderboard();
     }, REFRESH_INTERVAL);
 
     return () => {
@@ -48,7 +59,7 @@ export default observer(function LeaderboardPage() {
         clearInterval(refreshIntervalRef.current);
       }
     };
-  }, []);
+  }, [useRemoteAPI, locationStore.selected?.id]);
 
   // Auto-scroll functionality
   useEffect(() => {
@@ -77,8 +88,22 @@ export default observer(function LeaderboardPage() {
   const handleMouseLeave = () => setAutoScroll(true);
 
   const handleManualRefresh = () => {
-    leaderboardStore.loadFromStorage();
-    setLastRefresh(new Date());
+    loadLeaderboard();
+  };
+
+  const handleToggleRemote = () => {
+    const newValue = !useRemoteAPI;
+    setUseRemoteAPI(newValue);
+    
+    // Show warning if trying to use remote API without location
+    if (newValue && !locationStore.selected?.id) {
+      toastStore.warning('Please select a location first to load from remote API');
+      setUseRemoteAPI(false);
+      return;
+    }
+    
+    // Load immediately when toggling
+    loadLeaderboard();
   };
 
   const getRankEmoji = (rank: number) => {
@@ -88,7 +113,7 @@ export default observer(function LeaderboardPage() {
     return `#${rank}`;
   };
 
-  const currentUserEmail = userStore.user?.email;
+  const currentUserPhone = userStore.user?.phone;
 
   const formatLastRefresh = () => {
     if (!lastRefresh) return 'Just now';
@@ -101,14 +126,23 @@ export default observer(function LeaderboardPage() {
   /**
    * Get the best attempt for a leaderboard entry
    * Finds the attempt with the highest score for the given user
+   * Note: When using remote API, entry.email contains phone number
    */
   const getBestAttempt = async (entry: typeof leaderboardStore.leaderboard[0]): Promise<SmileAttempt | null> => {
     try {
+      // For remote API, we can't get attempts from local storage
+      // The share functionality may not work for remote entries
+      if (useRemoteAPI) {
+        toastStore.warning('Share functionality is only available for local scores');
+        return null;
+      }
+
       const allAttempts = await getAllAttempts();
       
-      // Match by email (identity matching will find all attempts for this user)
+      // Match by phone (entry.email contains phone when from remote API, or email when from local)
+      // Since we now use phone for identity, try to match by phone
       const userAttempts = getAttemptsForIdentity(allAttempts, {
-        email: entry.email,
+        phone: entry.email, // entry.email may contain phone or email depending on source
       });
       
       if (userAttempts.length === 0) {
@@ -211,10 +245,20 @@ export default observer(function LeaderboardPage() {
           <h1 className="text-5xl font-bold text-white mb-2 drop-shadow-lg">
             🏆 Leaderboard
           </h1>
-          <p className="text-white/80 text-lg mb-4">
+          <p className="text-white/80 text-lg mb-2">
           The Pepso-Meter Hall of Smiles
           </p>
-          <div className="flex items-center justify-center gap-4 text-white/70 text-sm">
+          {useRemoteAPI && locationStore.selected && (
+            <p className="text-blue-300 text-sm mb-4">
+              📍 Loading from: {locationStore.selected.name}
+            </p>
+          )}
+          {!useRemoteAPI && (
+            <p className="text-white/60 text-sm mb-4">
+              💾 Loading from local storage
+            </p>
+          )}
+          <div className="flex items-center justify-center gap-4 text-white/70 text-sm flex-wrap">
             <span className="flex items-center gap-2">
               {leaderboardStore.isLoading && (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -228,6 +272,18 @@ export default observer(function LeaderboardPage() {
             >
               {leaderboardStore.isLoading ? 'Refreshing...' : '🔄 Refresh'}
             </button>
+            <button
+              onClick={handleToggleRemote}
+              className={`px-3 py-1 rounded-full transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${
+                useRemoteAPI
+                  ? 'bg-blue-500 hover:bg-blue-600 text-white'
+                  : 'bg-white/20 hover:bg-white/30 text-white/70'
+              }`}
+              disabled={leaderboardStore.isLoading}
+              title={useRemoteAPI ? 'Switch to local storage' : 'Switch to remote API'}
+            >
+              {useRemoteAPI ? '🌐 Remote' : '💾 Local'}
+            </button>
           </div>
         </div>
 
@@ -240,8 +296,20 @@ export default observer(function LeaderboardPage() {
         >
           <div className="space-y-3">
             {leaderboardStore.leaderboard.map((entry) => {
-              const isCurrentUser = entry.email === currentUserEmail;
-              const imageUrl = entry.imageData ? base64ToDataUrl(entry.imageData) : null;
+              // For remote API, entry.email contains phone; for local, it contains email
+              // But we now use phone for identity, so check if entry.email matches current user's phone
+              const isCurrentUser = entry.email === currentUserPhone;
+              // Handle both base64 data and URLs
+              let imageUrl: string | null = null;
+              if (entry.imageData) {
+                if (entry.imageData.startsWith('url:')) {
+                  // It's a URL, use it directly
+                  imageUrl = entry.imageData.substring(4);
+                } else {
+                  // It's base64, convert to data URL
+                  imageUrl = base64ToDataUrl(entry.imageData);
+                }
+              }
 
               const displayScore = Number.isFinite(entry.highestScore)
                 ? entry.highestScore

@@ -94,7 +94,7 @@ export default observer(function CapturePage() {
       <div className="w-full max-w-4xl space-y-6">
         <div className="text-center mb-6">
           <h1 className="text-4xl font-bold text-white mb-2">
-            Show Us Your Smile, {userStore.user?.firstName}! 😊
+            Show Us Your Smile, {userStore.user?.name?.split(/\s+/)[0] || 'there'}! 😊
           </h1>
           <p className="text-white/80 text-lg mb-2">
           Smile wide. We&apos;re counting down.

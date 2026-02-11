@@ -1,11 +1,9 @@
 import type { PersonalizedResponse } from '@/types/responses';
-import type { Gender } from '@/types/user';
 import { responseTemplates } from './response-templates';
 
 export function getPersonalizedResponse(
   score: number,
-  firstName: string,
-  gender: Gender
+  name: string
 ): PersonalizedResponse {
   // Determine score range
   let scoreRange: string;
@@ -21,20 +19,15 @@ export function getPersonalizedResponse(
     scoreRange = '0-20';
   }
 
-  // Find matching templates
-  const matchingTemplates = responseTemplates.filter(
-    t => t.scoreRange === scoreRange && t.gender === gender
+  // Get all templates for this score range (ignore gender)
+  const templates = responseTemplates.filter(
+    t => t.scoreRange === scoreRange
   );
-
-  // Fallback to 'other' if no match
-  const templates = matchingTemplates.length > 0
-    ? matchingTemplates
-    : responseTemplates.filter(t => t.scoreRange === scoreRange && t.gender === 'other');
 
   if (templates.length === 0) {
     // Ultimate fallback
     return {
-      message: `Great job ${firstName}! Your smile score is ${Math.round(score)}! 😊`,
+      message: `Great job ${name}! Your smile score is ${Math.round(score)}! 😊`,
       score,
       scoreRange,
     };
@@ -45,6 +38,9 @@ export function getPersonalizedResponse(
 
   // Randomly select one
   const selectedResponse = allResponses[Math.floor(Math.random() * allResponses.length)];
+
+  // Extract first name from full name for interpolation
+  const firstName = name.trim().split(/\s+/)[0] || name;
 
   // Interpolate firstName
   const message = selectedResponse.replace(/{firstName}/g, firstName);
