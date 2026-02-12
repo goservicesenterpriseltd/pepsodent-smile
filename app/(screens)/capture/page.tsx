@@ -11,6 +11,7 @@ import { toastStore } from '@/stores/ToastStore';
 import { uiStore } from '@/stores/UIStore';
 import { useEffect } from 'react';
 import { userStore } from '@/stores/UserStore';
+import type { FaceDetectionResult } from '@/lib/detection/face-detector';
 
 export default observer(function CapturePage() {
   // Redirect to personalize if user data is incomplete
@@ -28,7 +29,7 @@ export default observer(function CapturePage() {
     };
   }, []);
 
-  const handleCapture = async (file: File) => {
+  const handleCapture = async (file: File, detection: FaceDetectionResult | null) => {
     try {
       // Validate file before processing
       if (!file || file.size === 0) {
@@ -44,24 +45,43 @@ export default observer(function CapturePage() {
       // Store in camera store for preview
       cameraStore.setCapturedImage(file, URL.createObjectURL(file));
       
-      // Optimize image for API upload (smaller size, faster upload)
-      const optimizedFile = await optimizeImageForUpload(file);
-      
-      // Navigate to processing
-      uiStore.navigateTo('processing');
-      
-      // Analyze image - only proceed if API call succeeds
-      await luxandAPIStore.analyzeImage(optimizedFile);
-      
-      // Only navigate to results if API returned a valid score
-      // This ensures we only count attempts with successful API responses
-      if (luxandAPIStore.hasValidScore && luxandAPIStore.smileScore) {
-        // Navigate to results (camera will be stopped in results page useEffect)
-        uiStore.navigateTo('results');
+      if (luxandAPIStore.useInternalScoring) {
+        // Use our own face detector data to derive a score instead of calling Luxand.
+        if (!detection || !detection.isDetected) {
+          toastStore.error('No face data available for scoring. Please recapture your smile.');
+          uiStore.navigateTo('capture');
+          return;
+        }
+
+        luxandAPIStore.setInternalSmileScoreFromDetection(detection);
+
+        if (luxandAPIStore.hasValidScore && luxandAPIStore.smileScore) {
+          uiStore.navigateTo('processing');
+          uiStore.navigateTo('results');
+        } else {
+          toastStore.error('Failed to compute a score from the camera data. Please try again.');
+          uiStore.navigateTo('capture');
+        }
       } else {
-        // If no valid score, show error and stay on capture page
-        toastStore.error('Failed to get a valid score. Please try again.');
-        uiStore.navigateTo('capture');
+        // Optimize image for API upload (smaller size, faster upload)
+        const optimizedFile = await optimizeImageForUpload(file);
+        
+        // Navigate to processing
+        uiStore.navigateTo('processing');
+        
+        // Analyze image - only proceed if API call succeeds
+        await luxandAPIStore.analyzeImage(optimizedFile);
+        
+        // Only navigate to results if API returned a valid score
+        // This ensures we only count attempts with successful API responses
+        if (luxandAPIStore.hasValidScore && luxandAPIStore.smileScore) {
+          // Navigate to results (camera will be stopped in results page useEffect)
+          uiStore.navigateTo('results');
+        } else {
+          // If no valid score, show error and stay on capture page
+          toastStore.error('Failed to get a valid score. Please try again.');
+          uiStore.navigateTo('capture');
+        }
       }
     } catch (error) {
       console.error('Error processing image:', error);

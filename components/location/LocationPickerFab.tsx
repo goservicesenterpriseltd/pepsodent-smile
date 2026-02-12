@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 
 import type { PepsometerLocation } from '@/lib/api/pepsometer-api';
 import { locationStore } from '@/stores/LocationStore';
+import { luxandAPIStore } from '@/stores/LuxandAPIStore';
 import { observer } from 'mobx-react-lite';
 
 function getStateLabel(loc: PepsometerLocation): string {
@@ -203,7 +204,27 @@ export const LocationPickerFab = observer(function LocationPickerFab() {
 
   return (
     <>
-      <div className="fixed bottom-4 right-4 z-[999]">
+      <div className="fixed bottom-4 right-4 z-[999] flex items-center gap-2">
+        <button
+          onClick={() => {
+            luxandAPIStore.toggleScoringMode();
+          }}
+          className={[
+            'flex items-center gap-1 rounded-full px-3 py-2 text-xs font-semibold border transition',
+            luxandAPIStore.useInternalScoring
+              ? 'bg-white text-black border-white/80'
+              : 'bg-black/70 text-white border-white/40',
+          ].join(' ')}
+          aria-label="Toggle scoring mode"
+          title={
+            luxandAPIStore.useInternalScoring
+              ? 'Using internal face detector scoring'
+              : 'Using Luxand emotion API scoring'
+          }
+        >
+          <span>{luxandAPIStore.useInternalScoring ? 'Local score' : 'API score'}</span>
+        </button>
+
         <button
           onClick={() => {
             setQuery('');
