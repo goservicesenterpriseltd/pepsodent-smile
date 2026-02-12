@@ -14,7 +14,7 @@ interface CameraPreviewProps {
 export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const circleRef = useRef<HTMLDivElement>(null);
-  const [stream, setStream] = useState<MediaStream | null>(null);
+  const streamRef = useRef<MediaStream | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [faceDetection, setFaceDetection] = useState<FaceDetectionResult>({
     isDetected: false,
@@ -22,11 +22,20 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
   });
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
+  const [isMobileDevice, setIsMobileDevice] = useState(false);
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const stabilityIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const stablePositionRef = useRef<number>(0); // Track how long face has been well-positioned
   const countdownStartedRef = useRef<boolean>(false); // Track if countdown has started
+  const isMobileRef = useRef<boolean>(false);
+
+  const detectMobileDevice = () => {
+    if (typeof navigator === 'undefined') return false;
+    const ua = navigator.userAgent || '';
+    const isTouchMac = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
+    return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || isTouchMac;
+  };
 
   // Initialize face detector
   useEffect(() => {
@@ -39,20 +48,47 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
   useEffect(() => {
     const startCamera = async () => {
       try {
-        const mediaStream = await navigator.mediaDevices.getUserMedia({
-          video: {
-            facingMode: 'user',
-            width: { ideal: 1280 },
-            height: { ideal: 720 },
-            autoGainControl: true,
-            noiseSuppression: true,
-            echoCancellation: true,
-          },
-        });
+        isMobileRef.current = detectMobileDevice();
+        setIsMobileDevice(isMobileRef.current);
+
+        const baseVideoConstraints: MediaTrackConstraints = {
+          width: { ideal: 1280 },
+          height: { ideal: 720 },
+          autoGainControl: true,
+          noiseSuppression: true,
+          echoCancellation: true,
+        };
+
+        let mediaStream: MediaStream;
+        if (isMobileRef.current) {
+          // Mobile should use the back camera only.
+          try {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                ...baseVideoConstraints,
+                facingMode: { exact: 'environment' },
+              },
+            });
+          } catch {
+            mediaStream = await navigator.mediaDevices.getUserMedia({
+              video: {
+                ...baseVideoConstraints,
+                facingMode: 'environment',
+              },
+            });
+          }
+        } else {
+          mediaStream = await navigator.mediaDevices.getUserMedia({
+            video: {
+              ...baseVideoConstraints,
+              facingMode: 'user',
+            },
+          });
+        }
 
         if (videoRef.current) {
           videoRef.current.srcObject = mediaStream;
-          setStream(mediaStream);
+          streamRef.current = mediaStream;
           cameraStore.setActiveStream(mediaStream);
           cameraStore.setCameraActive(true);
           cameraStore.setPermission(true);
@@ -69,8 +105,8 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
 
     return () => {
       // Cleanup: stop camera when component unmounts
-      if (stream) {
-        stream.getTracks().forEach(track => track.stop());
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
       }
       if (detectionIntervalRef.current) {
         clearInterval(detectionIntervalRef.current);
@@ -189,8 +225,9 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
           cameraStore.setCapturedImage(file, previewUrl);
           
           // Stop camera after capture to save energy
-          if (stream) {
-            stream.getTracks().forEach(track => track.stop());
+          if (streamRef.current) {
+            streamRef.current.getTracks().forEach(track => track.stop());
+            streamRef.current = null;
             cameraStore.setActiveStream(null);
             cameraStore.setCameraActive(false);
           }
@@ -205,7 +242,7 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
       console.error('Failed to capture image:', err);
       setIsCapturing(false);
     }
-  }, [stream, isCapturing, onCapture, faceDetection]);
+  }, [isCapturing, onCapture, faceDetection]);
 
   // Stability check - when face becomes well-positioned
   useEffect(() => {
@@ -269,7 +306,7 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
         stabilityIntervalRef.current = null;
       }
     };
-  }, [faceDetection.isWellPositioned, isCapturing]);
+  }, [faceDetection.isWellPositioned, countdown, isCapturing]);
 
   // Countdown interval - separate effect that runs when countdown starts
   useEffect(() => {
@@ -318,11 +355,9 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
   }
 
   const borderColor = faceDetection.isWellPositioned ? '#10b981' : '#e60012'; // Green or Red
-  const borderAnimation = faceDetection.isWellPositioned ? 'animate-pulse' : 'animate-pulse';
-
   return (
     <div className="relative w-full max-w-2xl mx-auto">
-      <div className="relative aspect-video bg-black rounded-lg overflow-hidden">
+      <div className="relative aspect-3/4 sm:aspect-video bg-black rounded-lg overflow-hidden">
         <video
           ref={videoRef}
           autoPlay
@@ -334,21 +369,27 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
         {/* Countdown overlay */}
         {countdown !== null && countdown > 0 && (
           <div className="absolute inset-0 flex items-center justify-center bg-black/50 z-20">
-            <div className="text-9xl font-bold text-white drop-shadow-2xl animate-bounce">
+            <div className="text-6xl sm:text-8xl md:text-9xl font-bold text-white drop-shadow-2xl animate-bounce">
               {countdown}
             </div>
           </div>
         )}
 
         {/* Face detection feedback */}
+        {isMobileDevice && (
+          <div className="absolute bottom-3 sm:bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-medium z-10 text-center max-w-[90%]">
+            Rear camera active
+          </div>
+        )}
+
         {faceDetection.isDetected && !faceDetection.isWellPositioned && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-4 py-2 rounded-full text-lg font-semibold z-10">
+          <div className="absolute top-3 sm:top-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-3 sm:px-4 py-2 rounded-full text-sm sm:text-lg font-semibold z-10 text-center max-w-[90%]">
             Position your face in the circle
           </div>
         )}
 
         {faceDetection.isWellPositioned && countdown === null && (
-          <div className="absolute top-4 left-1/2 transform -translate-x-1/2 bg-green-500/90 text-white px-4 py-2 rounded-full text-lg font-semibold z-10">
+          <div className="absolute top-3 sm:top-4 left-1/2 transform -translate-x-1/2 bg-green-500/90 text-white px-3 sm:px-4 py-2 rounded-full text-sm sm:text-lg font-semibold z-10 text-center max-w-[90%]">
             Perfect! Get ready... 😊
           </div>
         )}
@@ -357,7 +398,7 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
         <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
           <div
             ref={circleRef}
-            className="w-64 h-64 border-4 rounded-full transition-all duration-300"
+            className="w-44 h-44 sm:w-64 sm:h-64 border-4 rounded-full transition-all duration-300"
             style={{
               borderColor,
               boxShadow: faceDetection.isWellPositioned 
@@ -372,9 +413,9 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
         <button
           onClick={captureImage}
           disabled={isCapturing}
-          className="px-8 py-4 bg-[#e60012] text-white rounded-full font-bold text-lg hover:bg-[#ff1a2e] transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
+          className="px-5 sm:px-8 py-3 sm:py-4 bg-[#e60012] text-white rounded-full font-bold text-sm sm:text-lg hover:bg-[#ff1a2e] transition-all transform hover:scale-105 active:scale-95 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none"
         >
-          {isCapturing ? 'Capturing...' : '📸 Capture Smile (Fallback)'}
+          {isCapturing ? 'Capturing...' : 'Capture Smile'}
         </button>
       </div>
     </div>

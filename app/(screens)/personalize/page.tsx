@@ -70,18 +70,18 @@ export default observer(function PersonalizePage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-white p-4 relative">
+    <div className="min-h-screen flex items-center justify-center bg-white p-3 sm:p-4 relative">
       {/* Logo Top Right */}
-      <div className="absolute top-4 left-4 w-32 h-24 z-10">
+      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 w-24 h-16 sm:w-32 sm:h-24 z-10">
         <Logo width={128} height={96} />
       </div>
       
-      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border-2 border-black p-8 space-y-6">
+      <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border-2 border-black p-5 sm:p-8 space-y-5 sm:space-y-6 mt-12 sm:mt-0">
         <div className="text-center mb-6">
-          <h1 className="text-3xl font-bold text-black mb-2">
+          <h1 className="text-2xl sm:text-3xl font-bold text-black mb-2">
             Personalize Your Experience
           </h1>
-          <p className="text-gray-600">
+          <p className="text-sm sm:text-base text-gray-600">
             Let&apos;s put a name to that great smile.
           </p>
         </div>

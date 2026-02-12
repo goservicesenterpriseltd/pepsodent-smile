@@ -201,13 +201,13 @@ export default observer(function LeaderboardPage() {
   // Show loading state during SSR or initial client load
   if (!isMounted || (leaderboardStore.isLoading && leaderboardStore.leaderboard.length === 0)) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black relative">
-        <div className="absolute top-4 left-4 w-32 h-24 z-10">
+      <div className="min-h-screen flex items-center justify-center bg-black relative p-3 sm:p-4">
+        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 w-24 h-16 sm:w-32 sm:h-24 z-10">
           <Logo width={128} height={96} />
         </div>
         <div className="text-center">
           <div className="w-16 h-16 border-4 border-white border-t-transparent rounded-full animate-spin mx-auto mb-4"></div>
-          <p className="text-white text-lg">Loading leaderboard...</p>
+          <p className="text-white text-sm sm:text-lg">Loading leaderboard...</p>
         </div>
       </div>
     );
@@ -215,13 +215,13 @@ export default observer(function LeaderboardPage() {
 
   if (leaderboardStore.leaderboard.length === 0) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-black p-4 relative">
-        <div className="absolute top-4 left-4 w-32 h-24 z-10">
+      <div className="min-h-screen flex items-center justify-center bg-black p-3 sm:p-4 relative">
+        <div className="absolute top-3 left-3 sm:top-4 sm:left-4 w-24 h-16 sm:w-32 sm:h-24 z-10">
           <Logo width={128} height={96} />
         </div>
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border-2 border-black p-8 text-center space-y-6">
+        <div className="max-w-md w-full bg-white rounded-2xl shadow-2xl border-2 border-black p-5 sm:p-8 text-center space-y-5 sm:space-y-6 mt-12 sm:mt-0">
           <div className="text-6xl mb-4">🏆</div>
-          <h1 className="text-3xl font-bold text-black">No Scores Yet!</h1>
+          <h1 className="text-2xl sm:text-3xl font-bold text-black">No Scores Yet!</h1>
           <p className="text-gray-600">Be the first to play and claim the top spot!</p>
           <Link href="/">
             <Button variant="accent" size="lg" className="w-full">
@@ -234,18 +234,18 @@ export default observer(function LeaderboardPage() {
   }
 
   return (
-    <div className="min-h-screen bg-black p-4 relative">
+    <div className="min-h-screen bg-black p-3 sm:p-4 relative">
       {/* Logo Top Right */}
-      <div className="absolute top-4 left-4 w-32 h-24 z-10">
+      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 w-24 h-16 sm:w-32 sm:h-24 z-10">
         <Logo width={128} height={96} />
       </div>
-      <div className="max-w-4xl mx-auto space-y-6">
+      <div className="max-w-4xl mx-auto space-y-4 sm:space-y-6 pt-12 sm:pt-0">
         {/* Header */}
-        <div className="text-center pt-8">
-          <h1 className="text-5xl font-bold text-white mb-2 drop-shadow-lg">
+        <div className="text-center pt-4 sm:pt-8">
+          <h1 className="text-3xl sm:text-5xl font-bold text-white mb-2 drop-shadow-lg">
             🏆 Leaderboard
           </h1>
-          <p className="text-white/80 text-lg mb-2">
+          <p className="text-white/80 text-sm sm:text-lg mb-2">
           The Pepso-Meter Hall of Smiles
           </p>
           {useRemoteAPI && locationStore.selected && (
@@ -258,7 +258,7 @@ export default observer(function LeaderboardPage() {
               💾 Loading from local storage
             </p>
           )}
-          <div className="flex items-center justify-center gap-4 text-white/70 text-sm flex-wrap">
+          <div className="flex items-center justify-center gap-2 sm:gap-4 text-white/70 text-xs sm:text-sm flex-wrap">
             <span className="flex items-center gap-2">
               {leaderboardStore.isLoading && (
                 <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
@@ -292,7 +292,7 @@ export default observer(function LeaderboardPage() {
           ref={scrollContainerRef}
           onMouseEnter={handleMouseEnter}
           onMouseLeave={handleMouseLeave}
-          className="bg-white/10 backdrop-blur-sm rounded-2xl p-6 max-h-[600px] overflow-y-auto border border-white/20"
+          className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 sm:p-6 max-h-[70vh] sm:max-h-[600px] overflow-y-auto border border-white/20"
         >
           <div className="space-y-3">
             {leaderboardStore.leaderboard.map((entry) => {
@@ -318,18 +318,18 @@ export default observer(function LeaderboardPage() {
               return (
                 <div
                   key={entry.email}
-                  className={`bg-white rounded-lg p-4 flex items-center gap-4 shadow-md hover:shadow-lg transition-all border border-black/10 ${
+                  className={`bg-white rounded-lg p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 shadow-md hover:shadow-lg transition-all border border-black/10 ${
                     isCurrentUser ? 'ring-2 ring-black bg-gray-50' : ''
                   }`}
                 >
                   {/* Rank */}
-                  <div className="text-2xl font-bold text-black w-12 text-center flex-shrink-0">
+                  <div className="text-base sm:text-2xl font-bold text-black w-8 sm:w-12 text-center shrink-0">
                     {getRankEmoji(entry.rank)}
                   </div>
 
                   {/* Image */}
                   {imageUrl ? (
-                    <div className="w-16 h-16 rounded-full overflow-hidden flex-shrink-0 border-2 border-black">
+                    <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full overflow-hidden shrink-0 border-2 border-black">
                       <img
                         src={imageUrl}
                         alt={`${entry.firstName} ${entry.lastName}`}
@@ -337,45 +337,43 @@ export default observer(function LeaderboardPage() {
                       />
                     </div>
                   ) : (
-                    <div className="w-16 h-16 rounded-full bg-black flex items-center justify-center text-white text-2xl font-bold flex-shrink-0 border-2 border-black">
+                    <div className="w-10 h-10 sm:w-16 sm:h-16 rounded-full bg-black flex items-center justify-center text-white text-base sm:text-2xl font-bold shrink-0 border-2 border-black">
                       {entry.firstName.charAt(0)}{entry.lastName.charAt(0)}
                     </div>
                   )}
 
                   {/* User Info */}
                   <div className="flex-1 min-w-0">
-                    <div className="font-semibold text-black text-lg truncate">
+                    <div className="font-semibold text-black text-xs sm:text-lg truncate">
                       {entry.firstName} {entry.lastName}
                       {isCurrentUser && (
-                        <span className="ml-2 text-sm text-black/70">(You)</span>
+                        <span className="ml-1 sm:ml-2 text-xs sm:text-sm text-black/70">(You)</span>
                       )}
                     </div>
-                    <div className="text-sm text-gray-600">
+                    <div className="text-[11px] sm:text-sm text-gray-600 leading-tight">
                       {entry.attemptCount} attempt{entry.attemptCount !== 1 ? 's' : ''} • 
                       Avg: {Math.round(entry.averageScore)} • 
                       Best: {Math.round(entry.highestScore)}
                     </div>
                   </div>
 
-                  {/* Score */}
-                  <div className="text-right flex-shrink-0 mr-2">
-                    <div className="text-2xl font-bold text-black">
-                      {Math.round(displayScore)}
+                  {/* Score + Share */}
+                  <div className="shrink-0 flex flex-col items-end gap-1">
+                    <div className="text-right">
+                      <div className="text-base sm:text-2xl font-bold text-black leading-none">
+                        {Math.round(displayScore)}
+                      </div>
+                      <div className="hidden sm:block text-xs text-gray-500">score</div>
                     </div>
-                    <div className="text-xs text-gray-500">score</div>
-                  </div>
-
-                  {/* Share Button */}
-                  <div className="flex-shrink-0">
                     <button
                       onClick={() => handleShare(entry)}
-                      className="w-10 h-10 flex items-center justify-center bg-black hover:bg-gray-800 text-white rounded-lg transition-colors shadow-md hover:shadow-lg"
+                      className="w-7 h-7 sm:w-10 sm:h-10 flex items-center justify-center bg-black hover:bg-gray-800 text-white rounded-lg transition-colors shadow-md hover:shadow-lg"
                       title="Share this player's score"
                       aria-label="Share score"
                     >
                       <svg
                         xmlns="http://www.w3.org/2000/svg"
-                        className="h-5 w-5"
+                        className="h-4 w-4 sm:h-5 sm:w-5"
                         fill="none"
                         viewBox="0 0 24 24"
                         stroke="currentColor"
@@ -396,8 +394,8 @@ export default observer(function LeaderboardPage() {
         </div>
 
         {/* Navigation */}
-        <div className="flex justify-center gap-4 pb-8">
-          <Link href="/">
+        <div className="flex flex-col sm:flex-row justify-center gap-3 sm:gap-4 pb-8">
+          <Link href="/" className="w-full sm:w-auto">
             <Button variant="accent" size="md">
               Play Game 🎮
             </Button>

@@ -195,20 +195,9 @@ class LeaderboardStore {
             .sort((a, b) => b - a);
         }
         
-        // If no activities array, try to use aggregated stats
-        if (scores.length === 0 && player.activities_avg_score) {
-          // If we only have average, we can't calculate total/highest properly
-          // But we can use the average as a fallback
-          scores = [player.activities_avg_score];
-        }
-
         const totalScore = scores.reduce((sum, s) => sum + s, 0);
         const highestScore = scores.length > 0 ? scores[0] : 0;
-        const averageScore = player.activities_avg_score 
-          ? player.activities_avg_score 
-          : scores.length > 0 
-            ? totalScore / scores.length 
-            : 0;
+        const averageScore = scores.length > 0 ? totalScore / scores.length : 0;
         const attemptCount = player.activities_count || player.activities?.length || scores.length || 0;
         
         // Get the most recent activity for image and last played time

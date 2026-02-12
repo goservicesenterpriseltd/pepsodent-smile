@@ -105,25 +105,25 @@ export default observer(function CapturePage() {
   }
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-black p-4 relative">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-black p-3 sm:p-4 relative">
       {/* Logo Top Right */}
-      <div className="absolute top-4 left-4 w-32 h-24 z-10">
+      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 w-24 h-16 sm:w-32 sm:h-24 z-10">
         <Logo width={128} height={96} />
       </div>
       
-      <div className="w-full max-w-4xl space-y-6">
-        <div className="text-center mb-6">
-          <h1 className="text-4xl font-bold text-white mb-2">
+      <div className="w-full max-w-4xl space-y-4 sm:space-y-6 pt-14 sm:pt-0">
+        <div className="text-center mb-4 sm:mb-6">
+          <h1 className="text-2xl sm:text-4xl font-bold text-white mb-2 leading-tight">
             Show Us Your Smile, {userStore.user?.name?.split(/\s+/)[0] || 'there'}! 😊
           </h1>
-          <p className="text-white/80 text-lg mb-2">
+          <p className="text-white/80 text-sm sm:text-lg mb-2">
           Smile wide. We&apos;re counting down.
           </p>
-          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 mt-4 max-w-md mx-auto border border-white/20">
-            <p className="text-white/90 text-sm">
+          <div className="bg-white/10 backdrop-blur-sm rounded-lg p-3 mt-3 sm:mt-4 max-w-md mx-auto border border-white/20">
+            <p className="text-white/90 text-xs sm:text-sm">
               💡 <strong>Tips:</strong> Make sure your face is clearly visible, well-lit, and centered in the frame
             </p>
-            <p className="text-white/90 text-sm mt-2">
+            <p className="text-white/90 text-xs sm:text-sm mt-2">
               😁 Show your teeth for the best smile score
             </p>
           </div>
