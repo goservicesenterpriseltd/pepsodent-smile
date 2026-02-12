@@ -45,11 +45,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} ${fredoka.variable} ${poppins.variable} antialiased`}
       >
-        <MobileRouteGuard>
-          {children}
-          <ToastContainer />
-          <LocationPickerFab />
-        </MobileRouteGuard>
+        {children}
+        <ToastContainer />
+        <LocationPickerFab />
+        {/* <MobileRouteGuard>
+          
+        </MobileRouteGuard> */}
       </body>
     </html>
   );
