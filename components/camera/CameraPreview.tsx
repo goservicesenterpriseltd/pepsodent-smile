@@ -44,6 +44,9 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
             facingMode: 'user',
             width: { ideal: 1280 },
             height: { ideal: 720 },
+            autoGainControl: true,
+            noiseSuppression: true,
+            echoCancellation: true,
           },
         });
 

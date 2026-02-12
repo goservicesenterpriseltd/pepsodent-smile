@@ -46,7 +46,7 @@ export async function initializeFaceDetector(): Promise<blazeface.BlazeFaceModel
       inputWidth: 128,
       inputHeight: 128,
       iouThreshold: 0.3,
-      scoreThreshold: 0.5,
+      scoreThreshold: 0.4,
     });
     console.log('Blazeface model loaded successfully');
     isModelLoading = false;
@@ -144,7 +144,7 @@ export async function detectFace(
       }
     }
     
-    const hasGoodConfidence = confidence > 0.7;
+    const hasGoodConfidence = confidence > 0.5;
 
     const isWellPositioned = isWithinCircle && isGoodSize && hasGoodConfidence;
     
