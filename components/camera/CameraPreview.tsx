@@ -8,7 +8,7 @@ import { cameraStore } from '@/stores/CameraStore';
 import { observer } from 'mobx-react-lite';
 
 interface CameraPreviewProps {
-  onCapture: (file: File) => void;
+  onCapture: (file: File, detection: FaceDetectionResult | null) => void;
 }
 
 export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
@@ -196,7 +196,7 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
           }
           
           setIsCapturing(false);
-          onCapture(file);
+          onCapture(file, faceDetection || null);
         },
         'image/jpeg',
         0.9
@@ -205,7 +205,7 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
       console.error('Failed to capture image:', err);
       setIsCapturing(false);
     }
-  }, [stream, isCapturing, onCapture]);
+  }, [stream, isCapturing, onCapture, faceDetection]);
 
   // Stability check - when face becomes well-positioned
   useEffect(() => {

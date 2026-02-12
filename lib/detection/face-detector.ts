@@ -17,6 +17,15 @@ export interface FaceDetectionResult {
   isWellPositioned: boolean;
   position?: FacePosition;
   confidence?: number;
+  // Extra diagnostics used for internal scoring & debugging
+  distanceFromCenter?: number;
+  maxDistance?: number;
+  isWithinCircle?: boolean;
+  faceSize?: number;
+  minFaceSize?: number;
+  maxFaceSize?: number;
+  isGoodSize?: boolean;
+  hasGoodConfidence?: boolean;
 }
 
 let detector: blazeface.BlazeFaceModel | null = null;
@@ -46,7 +55,7 @@ export async function initializeFaceDetector(): Promise<blazeface.BlazeFaceModel
       inputWidth: 128,
       inputHeight: 128,
       iouThreshold: 0.3,
-      scoreThreshold: 0.4,
+      scoreThreshold: 0.6,
     });
     console.log('Blazeface model loaded successfully');
     isModelLoading = false;
@@ -133,7 +142,7 @@ export async function detectFace(
 
     const isWithinCircle = distanceFromCenter < maxDistance;
     const isGoodSize = faceSize >= minFaceSize && faceSize <= maxFaceSize;
-    
+
     // Get confidence score - handle both number and tensor types
     let confidence = 0.5;
     if (face.probability) {
@@ -144,7 +153,7 @@ export async function detectFace(
       }
     }
     
-    const hasGoodConfidence = confidence > 0.5;
+    const hasGoodConfidence = confidence > 0.7;
 
     const isWellPositioned = isWithinCircle && isGoodSize && hasGoodConfidence;
     
@@ -175,6 +184,14 @@ export async function detectFace(
         centerY: screenFaceCenterY,
       },
       confidence,
+      distanceFromCenter,
+      maxDistance,
+      isWithinCircle,
+      faceSize,
+      minFaceSize,
+      maxFaceSize,
+      isGoodSize,
+      hasGoodConfidence,
     };
   } catch (error) {
     console.error('Face detection error:', error);
