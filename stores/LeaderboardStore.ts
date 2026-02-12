@@ -14,6 +14,17 @@ import { getAttemptsForIdentity } from '@/lib/leaderboard/identity';
 import { toastStore } from './ToastStore';
 import { getPlayers, type PlayerData } from '@/lib/api/pepsometer-api';
 
+function toFiniteNumber(value: unknown): number | null {
+  if (typeof value === 'number') {
+    return Number.isFinite(value) ? value : null;
+  }
+  if (typeof value === 'string') {
+    const parsed = Number(value.trim());
+    return Number.isFinite(parsed) ? parsed : null;
+  }
+  return null;
+}
+
 class LeaderboardStore {
   attempts: SmileAttempt[] = [];
   leaderboard: LeaderboardEntry[] = [];
@@ -190,15 +201,45 @@ class LeaderboardStore {
         let scores: number[] = [];
         if (player.activities && Array.isArray(player.activities)) {
           scores = player.activities
-            .map(activity => activity.score)
-            .filter((s): s is number => typeof s === 'number' && Number.isFinite(s))
+            .map(activity =>
+              toFiniteNumber(activity.score) ??
+              toFiniteNumber(activity.total_score) ??
+              toFiniteNumber(activity.smile_score)
+            )
+            .filter((s): s is number => s !== null)
             .sort((a, b) => b - a);
         }
-        
-        const totalScore = scores.reduce((sum, s) => sum + s, 0);
-        const highestScore = scores.length > 0 ? scores[0] : 0;
-        const averageScore = scores.length > 0 ? totalScore / scores.length : 0;
-        const attemptCount = player.activities_count || player.activities?.length || scores.length || 0;
+
+        const activitiesCountFromApi =
+          toFiniteNumber(player.activities_count) ??
+          player.activities?.length ??
+          scores.length ??
+          0;
+        const attemptCount = Math.max(0, Math.floor(activitiesCountFromApi));
+
+        const totalScoreFromActivities = scores.reduce((sum, s) => sum + s, 0);
+        const highestScoreFromActivities = scores.length > 0 ? scores[0] : null;
+        const averageScoreFromActivities = scores.length > 0 ? totalScoreFromActivities / scores.length : null;
+
+        const highestScoreFallback =
+          toFiniteNumber(player.highest_score) ??
+          toFiniteNumber(player.max_score) ??
+          toFiniteNumber(player.best_score) ??
+          toFiniteNumber(player.activities_max_score) ??
+          toFiniteNumber(player.score);
+
+        const averageScoreFallback =
+          toFiniteNumber(player.average_score) ??
+          toFiniteNumber(player.activities_avg_score);
+
+        const highestScore = highestScoreFromActivities ?? highestScoreFallback ?? 0;
+        const averageScore = averageScoreFromActivities ?? averageScoreFallback ?? 0;
+        const totalScore =
+          scores.length > 0
+            ? totalScoreFromActivities
+            : averageScore > 0 && attemptCount > 0
+              ? averageScore * attemptCount
+              : highestScore;
         
         // Get the most recent activity for image and last played time
         let imageData: string | undefined;
