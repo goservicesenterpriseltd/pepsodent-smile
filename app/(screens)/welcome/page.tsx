@@ -283,7 +283,7 @@ export default observer(function WelcomePage() {
     <>
       <WelcomeContent variant={variant} />
       {/* Variant Switcher - for testing/design review */}
-      <div className="hidden md:flex fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 gap-2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border-2 border-black">
+      {/* <div className="hidden md:flex fixed bottom-4 left-1/2 transform -translate-x-1/2 z-50 gap-2 bg-white/90 backdrop-blur-sm px-4 py-2 rounded-full shadow-lg border-2 border-black">
         <button
           onClick={() => switchVariant(1)}
           className={`px-4 py-2 rounded-full font-semibold transition-all ${variant === 1
@@ -311,7 +311,7 @@ export default observer(function WelcomePage() {
         >
           Design 3
         </button>
-      </div>
+      </div> */}
     </>
   );
 });
