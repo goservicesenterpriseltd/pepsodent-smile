@@ -321,33 +321,33 @@ export default observer(function ResultsPage() {
   const nextAttemptNumber = displayCount;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center bg-white p-4 relative">
+    <div className="min-h-screen flex flex-col items-center justify-center bg-white p-3 sm:p-4 relative">
       <CelebrationConfetti score={score} trigger={showConfetti} />
       {/* Logo Top Right */}
-      <div className="absolute top-4 left-4 w-32 h-24 z-10">
+      <div className="absolute top-3 left-3 sm:top-4 sm:left-4 w-24 h-16 sm:w-32 sm:h-24 z-10">
         <Logo width={128} height={96} />
       </div>
       
-      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border-2 border-black p-8 md:p-12 space-y-8 text-center">
+      <div className="max-w-2xl w-full bg-white rounded-2xl shadow-2xl border-2 border-black p-5 sm:p-8 md:p-12 space-y-6 sm:space-y-8 text-center mt-12 sm:mt-0">
         {/* Score Display */}
         <div className="space-y-4">
-          <h2 className="text-2xl font-semibold text-black">
+          <h2 className="text-xl sm:text-2xl font-semibold text-black">
             Your Smile Score
           </h2>
           <div className="relative inline-block">
             <div
-              className="text-8xl font-bold"
+              className="text-6xl sm:text-8xl font-bold"
               style={{ color: scoreColor }}
             >
               {Math.round(score)}
             </div>
-            <div className="text-2xl text-gray-500">/ 100</div>
+            <div className="text-lg sm:text-2xl text-gray-500">/ 100</div>
           </div>
         </div>
 
         {/* Personalized Message */}
-        <div className="bg-black text-white rounded-lg p-6">
-          <p className="text-xl md:text-2xl leading-relaxed">
+        <div className="bg-black text-white rounded-lg p-4 sm:p-6">
+          <p className="text-base sm:text-xl md:text-2xl leading-relaxed">
             {response.message}
           </p>
         </div>
