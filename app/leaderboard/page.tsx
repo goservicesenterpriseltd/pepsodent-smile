@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/Button';
 import Link from 'next/link';
@@ -16,6 +16,7 @@ import { observer } from 'mobx-react-lite';
 import { toastStore } from '@/stores/ToastStore';
 import { userStore } from '@/stores/UserStore';
 import { locationStore } from '@/stores/LocationStore';
+import { getPlayers, type ActivityData, type PlayerData } from '@/lib/api/pepsometer-api';
 
 const REFRESH_INTERVAL = appConfig.leaderboardRefreshIntervalMs;
 
@@ -26,26 +27,28 @@ export default observer(function LeaderboardPage() {
   const [selectedAttempt, setSelectedAttempt] = useState<SmileAttempt | null>(null);
   const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   const [useRemoteAPI, setUseRemoteAPI] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const selectedLocationId = locationStore.selected?.id;
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const scrollIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const refreshIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Load function that respects the toggle state
-  const loadLeaderboard = async () => {
-    if (useRemoteAPI && locationStore.selected?.id) {
-      await leaderboardStore.loadFromRemoteAPI(locationStore.selected.id);
+  const loadLeaderboard = useCallback(async () => {
+    if (useRemoteAPI && selectedLocationId) {
+      await leaderboardStore.loadFromRemoteAPI(selectedLocationId);
     } else {
       await leaderboardStore.loadFromStorage();
     }
     setLastRefresh(new Date());
-  };
+  }, [selectedLocationId, useRemoteAPI]);
 
   // Track client-side mount to prevent hydration mismatch
   useEffect(() => {
     setIsMounted(true);
     locationStore.hydrate();
     loadLeaderboard();
-  }, []);
+  }, [loadLeaderboard]);
 
   // Auto-refresh leaderboard
   useEffect(() => {
@@ -59,11 +62,11 @@ export default observer(function LeaderboardPage() {
         clearInterval(refreshIntervalRef.current);
       }
     };
-  }, [useRemoteAPI, locationStore.selected?.id]);
+  }, [loadLeaderboard]);
 
   // Auto-scroll functionality
   useEffect(() => {
-    if (!autoScroll || !scrollContainerRef.current) return;
+    if (!autoScroll || !scrollContainerRef.current || searchQuery.trim().length > 0) return;
 
     const container = scrollContainerRef.current;
     let scrollPosition = 0;
@@ -82,7 +85,7 @@ export default observer(function LeaderboardPage() {
         clearInterval(scrollIntervalRef.current);
       }
     };
-  }, [autoScroll, leaderboardStore.leaderboard]);
+  }, [autoScroll, searchQuery]);
 
   const handleMouseEnter = () => setAutoScroll(false);
   const handleMouseLeave = () => setAutoScroll(true);
@@ -91,7 +94,7 @@ export default observer(function LeaderboardPage() {
     loadLeaderboard();
   };
 
-  const handleToggleRemote = () => {
+  const handleToggleRemote = async () => {
     const newValue = !useRemoteAPI;
     setUseRemoteAPI(newValue);
     
@@ -103,7 +106,12 @@ export default observer(function LeaderboardPage() {
     }
     
     // Load immediately when toggling
-    loadLeaderboard();
+    if (newValue && locationStore.selected?.id) {
+      await leaderboardStore.loadFromRemoteAPI(locationStore.selected.id);
+    } else {
+      await leaderboardStore.loadFromStorage();
+    }
+    setLastRefresh(new Date());
   };
 
   const getRankEmoji = (rank: number) => {
@@ -114,6 +122,17 @@ export default observer(function LeaderboardPage() {
   };
 
   const currentUserPhone = userStore.user?.phone;
+  const normalizedSearch = searchQuery.trim().toLowerCase();
+  const filteredLeaderboard = leaderboardStore.leaderboard.filter((entry) => {
+    if (!normalizedSearch) return true;
+    const fullName = `${entry.firstName} ${entry.lastName}`.trim().toLowerCase();
+    return (
+      fullName.includes(normalizedSearch) ||
+      entry.firstName.toLowerCase().includes(normalizedSearch) ||
+      entry.lastName.toLowerCase().includes(normalizedSearch) ||
+      entry.email.toLowerCase().includes(normalizedSearch)
+    );
+  });
 
   const formatLastRefresh = () => {
     if (!lastRefresh) return 'Just now';
@@ -123,6 +142,132 @@ export default observer(function LeaderboardPage() {
     return `${minutesAgo}m ago`;
   };
 
+  const toFiniteNumber = (value: unknown): number | null => {
+    if (typeof value === 'number') {
+      return Number.isFinite(value) ? value : null;
+    }
+    if (typeof value === 'string') {
+      const parsed = Number(value.trim());
+      return Number.isFinite(parsed) ? parsed : null;
+    }
+    return null;
+  };
+
+  const toTimestamp = (...values: Array<unknown>): number => {
+    for (const value of values) {
+      if (typeof value === 'string' && value.trim().length > 0) {
+        const parsed = new Date(value).getTime();
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+    }
+    return Date.now();
+  };
+
+  const resolveEntryImageForShare = (entryImageData?: string): string | undefined => {
+    if (!entryImageData) return undefined;
+    if (entryImageData.startsWith('url:')) {
+      return entryImageData.slice(4);
+    }
+    return entryImageData;
+  };
+
+  const pickBestRemoteActivity = (player: PlayerData): ActivityData | null => {
+    if (!Array.isArray(player.activities) || player.activities.length === 0) {
+      return null;
+    }
+
+    const withRemoteId = player.activities.filter((activity) => activity.id != null);
+    if (withRemoteId.length === 0) {
+      return null;
+    }
+
+    const sorted = [...withRemoteId].sort((a, b) => {
+      const scoreA =
+        toFiniteNumber(a.score) ??
+        toFiniteNumber(a.total_score) ??
+        toFiniteNumber(a.smile_score) ??
+        0;
+      const scoreB =
+        toFiniteNumber(b.score) ??
+        toFiniteNumber(b.total_score) ??
+        toFiniteNumber(b.smile_score) ??
+        0;
+
+      if (scoreB !== scoreA) {
+        return scoreB - scoreA;
+      }
+
+      const timeA = toTimestamp(a.updated_at, a.created_at);
+      const timeB = toTimestamp(b.updated_at, b.created_at);
+      return timeB - timeA;
+    });
+
+    return sorted[0] ?? null;
+  };
+
+  const buildRemoteShareAttempt = (
+    entry: typeof leaderboardStore.leaderboard[0],
+    player: PlayerData
+  ): SmileAttempt | null => {
+    const bestActivity = pickBestRemoteActivity(player);
+    if (!bestActivity || bestActivity.id == null) {
+      return null;
+    }
+
+    const remoteId = String(bestActivity.id);
+    const score =
+      toFiniteNumber(bestActivity.score) ??
+      toFiniteNumber(bestActivity.total_score) ??
+      toFiniteNumber(bestActivity.smile_score) ??
+      entry.highestScore;
+
+    const imageData =
+      (typeof bestActivity.image_url === 'string' && bestActivity.image_url) ||
+      (typeof player.image_url === 'string' && player.image_url) ||
+      resolveEntryImageForShare(entry.imageData);
+
+    return {
+      id: `remote-${player.id ?? entry.email}-${remoteId}`,
+      email: entry.email,
+      firstName: entry.firstName,
+      lastName: entry.lastName,
+      phone: player.phone_number ?? entry.email,
+      gender: player.gender ?? 'unknown',
+      score,
+      timestamp: toTimestamp(bestActivity.updated_at, bestActivity.created_at, player.updated_at, entry.lastPlayed),
+      imageData,
+      remoteId,
+    };
+  };
+
+  const findRemotePlayerForEntry = (
+    entry: typeof leaderboardStore.leaderboard[0],
+    players: PlayerData[]
+  ): PlayerData | null => {
+    const normalizedPhone = entry.email.trim().toLowerCase();
+    const normalizedFirstName = entry.firstName.trim().toLowerCase();
+    const normalizedLastName = entry.lastName.trim().toLowerCase();
+
+    const byPhone = players.find((player) => (player.phone_number ?? '').trim().toLowerCase() === normalizedPhone);
+    if (byPhone) return byPhone;
+
+    const byEmail = players.find((player) => (player.email ?? '').trim().toLowerCase() === normalizedPhone);
+    if (byEmail) return byEmail;
+
+    return (
+      players.find(
+        (player) =>
+          (player.first_name ?? '').trim().toLowerCase() === normalizedFirstName &&
+          (player.last_name ?? '').trim().toLowerCase() === normalizedLastName
+      ) ?? null
+    );
+  };
+
   /**
    * Get the best attempt for a leaderboard entry
    * Finds the attempt with the highest score for the given user
@@ -130,11 +275,30 @@ export default observer(function LeaderboardPage() {
    */
   const getBestAttempt = async (entry: typeof leaderboardStore.leaderboard[0]): Promise<SmileAttempt | null> => {
     try {
-      // For remote API, we can't get attempts from local storage
-      // The share functionality may not work for remote entries
       if (useRemoteAPI) {
-        toastStore.warning('Share functionality is only available for local scores');
-        return null;
+        if (!locationStore.selected?.id) {
+          toastStore.warning('Please select a location first');
+          return null;
+        }
+
+        const response = await getPlayers(locationStore.selected.id);
+        if (!response.status || !Array.isArray(response.data)) {
+          return null;
+        }
+
+        const player = findRemotePlayerForEntry(entry, response.data);
+        if (!player) {
+          console.warn(`No remote player found for entry: ${entry.email}`);
+          return null;
+        }
+
+        const remoteAttempt = buildRemoteShareAttempt(entry, player);
+        if (!remoteAttempt) {
+          console.warn(`No shareable remote activity found for player: ${entry.email}`);
+          return null;
+        }
+
+        return remoteAttempt;
       }
 
       const allAttempts = await getAllAttempts();
@@ -285,6 +449,16 @@ export default observer(function LeaderboardPage() {
               {useRemoteAPI ? '🌐 Remote' : '💾 Local'}
             </button>
           </div>
+          <div className="mt-4 max-w-md mx-auto">
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(event) => setSearchQuery(event.target.value)}
+              placeholder="Search by name or phone/email..."
+              className="w-full px-4 py-2 rounded-full bg-white/90 text-black border border-white/40 focus:outline-none focus:ring-2 focus:ring-blue-400"
+              aria-label="Search leaderboard"
+            />
+          </div>
         </div>
 
         {/* Scrollable List */}
@@ -295,7 +469,7 @@ export default observer(function LeaderboardPage() {
           className="bg-white/10 backdrop-blur-sm rounded-2xl p-3 sm:p-6 max-h-[70vh] sm:max-h-[600px] overflow-y-auto border border-white/20"
         >
           <div className="space-y-3">
-            {leaderboardStore.leaderboard.map((entry) => {
+            {filteredLeaderboard.map((entry, index) => {
               // For remote API, entry.email contains phone; for local, it contains email
               // But we now use phone for identity, so check if entry.email matches current user's phone
               const isCurrentUser = entry.email === currentUserPhone;
@@ -314,10 +488,13 @@ export default observer(function LeaderboardPage() {
               const displayScore = Number.isFinite(entry.highestScore)
                 ? entry.highestScore
                 : entry.totalScore;
+              const entryKey =
+                entry.email?.trim() ||
+                `${entry.firstName}-${entry.lastName}-${entry.lastPlayed}-${entry.rank}-${index}`;
 
               return (
                 <div
-                  key={entry.email}
+                  key={entryKey}
                   className={`bg-white rounded-lg p-2.5 sm:p-4 flex items-center gap-2 sm:gap-4 shadow-md hover:shadow-lg transition-all border border-black/10 ${
                     isCurrentUser ? 'ring-2 ring-black bg-gray-50' : ''
                   }`}
@@ -390,6 +567,11 @@ export default observer(function LeaderboardPage() {
                 </div>
               );
             })}
+            {filteredLeaderboard.length === 0 && (
+              <div className="bg-white/90 rounded-lg p-6 text-center text-black">
+                No players found for &quot;{searchQuery.trim()}&quot;.
+              </div>
+            )}
           </div>
         </div>
 
