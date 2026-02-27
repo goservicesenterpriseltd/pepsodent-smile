@@ -107,11 +107,11 @@ export default observer(function PersonalizePage() {
             required
           />
 
-          <div className="pt-4">
+          {/* <div className="pt-4">
             <Button type="submit" variant="primary" size="lg" className="w-full">
               Continue to Camera 📸
             </Button>
-          </div>
+          </div> */}
         </form>
       </div>
     </div>
