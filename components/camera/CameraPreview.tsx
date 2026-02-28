@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { FaceDetectionResult } from '@/lib/detection/face-detector';
 import { cameraStore } from '@/stores/CameraStore';
+import { toastStore } from '@/stores/ToastStore';
 import { observer } from 'mobx-react-lite';
 
 interface CameraPreviewProps {
@@ -22,20 +23,12 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
   });
   const [countdown, setCountdown] = useState<number | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
-  const [isMobileDevice, setIsMobileDevice] = useState(false);
+  const [facingMode, setFacingMode] = useState<'user' | 'environment'>('user');
   const detectionIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const countdownIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const stabilityIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const stablePositionRef = useRef<number>(0); // Track how long face has been well-positioned
   const countdownStartedRef = useRef<boolean>(false); // Track if countdown has started
-  const isMobileRef = useRef<boolean>(false);
-
-  const detectMobileDevice = () => {
-    if (typeof navigator === 'undefined') return false;
-    const ua = navigator.userAgent || '';
-    const isTouchMac = /Macintosh/i.test(ua) && navigator.maxTouchPoints > 1;
-    return /Android|iPhone|iPad|iPod|Mobile/i.test(ua) || isTouchMac;
-  };
 
   // Initialize face detector
   useEffect(() => {
@@ -44,67 +37,79 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
     });
   }, []);
 
-  // Start camera
-  useEffect(() => {
-    const startCamera = async () => {
+  const startCameraWithFacingMode = useCallback(async (mode: 'user' | 'environment') => {
+    try {
+      setError(null);
+
+      const baseVideoConstraints: MediaTrackConstraints = {
+        width: { ideal: 1280 },
+        height: { ideal: 720 },
+        autoGainControl: true,
+        noiseSuppression: true,
+        echoCancellation: true,
+        facingMode: { ideal: mode },
+      };
+
+      let mediaStream: MediaStream;
       try {
-        isMobileRef.current = detectMobileDevice();
-        setIsMobileDevice(isMobileRef.current);
-
-        const baseVideoConstraints: MediaTrackConstraints = {
-          width: { ideal: 1280 },
-          height: { ideal: 720 },
-          autoGainControl: true,
-          noiseSuppression: true,
-          echoCancellation: true,
-        };
-
-        let mediaStream: MediaStream;
-        if (isMobileRef.current) {
-          // Mobile should use the back camera only.
-          try {
-            mediaStream = await navigator.mediaDevices.getUserMedia({
-              video: {
-                ...baseVideoConstraints,
-                facingMode: { exact: 'environment' },
-              },
-            });
-          } catch {
-            mediaStream = await navigator.mediaDevices.getUserMedia({
-              video: {
-                ...baseVideoConstraints,
-                facingMode: 'environment',
-              },
-            });
-          }
-        } else {
-          mediaStream = await navigator.mediaDevices.getUserMedia({
-            video: {
-              ...baseVideoConstraints,
-              facingMode: 'user',
-            },
-          });
-        }
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = mediaStream;
-          streamRef.current = mediaStream;
-          cameraStore.setActiveStream(mediaStream);
-          cameraStore.setCameraActive(true);
-          cameraStore.setPermission(true);
-        }
-      } catch (err) {
-        const errorMessage = err instanceof Error ? err.message : 'Failed to access camera';
-        setError(errorMessage);
-        cameraStore.setError(errorMessage);
-        cameraStore.setPermission(false);
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            ...baseVideoConstraints,
+            facingMode: { exact: mode },
+          },
+        });
+      } catch {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
+          video: {
+            ...baseVideoConstraints,
+            facingMode: mode,
+          },
+        });
       }
-    };
 
-    startCamera();
+      if (videoRef.current) {
+        videoRef.current.srcObject = mediaStream;
+        streamRef.current = mediaStream;
+        cameraStore.setActiveStream(mediaStream);
+        cameraStore.setCameraActive(true);
+        cameraStore.setPermission(true);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : 'Failed to access camera';
+      setError(errorMessage);
+      cameraStore.setError(errorMessage);
+      cameraStore.setPermission(false);
+    }
+  }, []);
+
+  const switchCamera = useCallback(async () => {
+    if (!streamRef.current) return;
+    const nextMode = facingMode === 'user' ? 'environment' : 'user';
+    const previousMode = facingMode;
+    streamRef.current.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+    setFacingMode(nextMode);
+    setError(null);
+    try {
+      await startCameraWithFacingMode(nextMode);
+      if (!streamRef.current) {
+        // startCameraWithFacingMode failed (e.g. no rear camera on laptop)
+        setFacingMode(previousMode);
+        await startCameraWithFacingMode(previousMode);
+        toastStore.warning('Rear camera not available on this device');
+      }
+    } catch {
+      setFacingMode(previousMode);
+      await startCameraWithFacingMode(previousMode);
+      toastStore.warning('Could not switch camera. This device may only have one camera.');
+    }
+  }, [facingMode, startCameraWithFacingMode]);
+
+  // Start camera on mount (switchCamera handles toggling)
+  useEffect(() => {
+    startCameraWithFacingMode(facingMode);
 
     return () => {
-      // Cleanup: stop camera when component unmounts
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -120,7 +125,7 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
       cameraStore.setActiveStream(null);
       cameraStore.setCameraActive(false);
     };
-  }, []);
+  }, [startCameraWithFacingMode]); // eslint-disable-line react-hooks/exhaustive-deps -- facingMode used for initial mount only
 
   // Face detection loop
   useEffect(() => {
@@ -375,12 +380,10 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
           </div>
         )}
 
-        {/* Face detection feedback */}
-        {isMobileDevice && (
-          <div className="absolute bottom-3 sm:bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-medium z-10 text-center max-w-[90%]">
-            Rear camera active
-          </div>
-        )}
+        {/* Camera mode indicator */}
+        <div className="absolute bottom-3 sm:bottom-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-3 py-1 rounded-full text-xs sm:text-sm font-medium z-10 text-center max-w-[90%]">
+          {facingMode === 'environment' ? 'Rear camera' : 'Front camera'}
+        </div>
 
         {faceDetection.isDetected && !faceDetection.isWellPositioned && (
           <div className="absolute top-3 sm:top-4 left-1/2 transform -translate-x-1/2 bg-black/70 text-white px-3 sm:px-4 py-2 rounded-full text-sm sm:text-lg font-semibold z-10 text-center max-w-[90%]">
@@ -409,7 +412,21 @@ export const CameraPreview = observer(({ onCapture }: CameraPreviewProps) => {
         </div>
       </div>
 
-      <div className="mt-6 flex justify-center">
+      <div className="mt-6 flex flex-col sm:flex-row items-center justify-center gap-4">
+        <button
+          type="button"
+          onClick={switchCamera}
+          disabled={isCapturing}
+          className="flex items-center gap-2 px-4 py-2.5 bg-white/20 text-white rounded-full font-medium text-sm hover:bg-white/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          aria-label={`Switch to ${facingMode === 'user' ? 'rear' : 'front'} camera`}
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <path d="M11 19H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" />
+            <path d="M13 5h7a2 2 0 0 1 2 2v10a2 2 0 0 1-2 2h-5" />
+            <circle cx="12" cy="12" r="3" />
+          </svg>
+          Switch camera
+        </button>
         <button
           onClick={captureImage}
           disabled={isCapturing}
