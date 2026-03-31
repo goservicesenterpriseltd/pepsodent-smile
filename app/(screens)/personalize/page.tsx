@@ -40,6 +40,10 @@ export default observer(function PersonalizePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
+    if (appConfig.appUsageDisabled) {
+      return;
+    }
+
     if (!validate()) {
       return;
     }
@@ -107,10 +111,22 @@ export default observer(function PersonalizePage() {
             required
           />
 
-          <div className="pt-4">
-            <Button type="submit" variant="primary" size="lg" className="w-full">
+          <div className="pt-4 space-y-2">
+            <Button
+              type="submit"
+              variant="primary"
+              size="lg"
+              className="w-full"
+              disabled={appConfig.appUsageDisabled}
+              title={appConfig.appUsageDisabled ? 'App usage is disabled' : undefined}
+            >
               Continue to Camera 📸
             </Button>
+            {appConfig.appUsageDisabled && (
+              <p className="text-center text-sm text-gray-600">
+                This experience is temporarily unavailable.
+              </p>
+            )}
           </div>
         </form>
       </div>

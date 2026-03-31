@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useState } from 'react';
 
 import type { PepsometerLocation } from '@/lib/api/pepsometer-api';
+import { appConfig } from '@/lib/config/app-config';
 import { locationStore } from '@/stores/LocationStore';
 import { luxandAPIStore } from '@/stores/LuxandAPIStore';
 import { observer } from 'mobx-react-lite';
@@ -201,12 +202,22 @@ export const LocationPickerFab = observer(function LocationPickerFab() {
   }, [open]);
 
   const label = locationStore.selected?.name ? `📍 ${locationStore.selected.name}` : '📍 Location';
+  const disabledHint = 'App usage is disabled';
+  const scoringTitle = appConfig.appUsageDisabled
+    ? disabledHint
+    : luxandAPIStore.useInternalScoring
+      ? 'Using internal face detector scoring'
+      : 'Using Luxand emotion API scoring';
+  const locationTitle = appConfig.appUsageDisabled ? disabledHint : undefined;
 
   return (
     <>
       <div className="fixed bottom-4 right-4 z-[999] flex items-center gap-2">
         <button
+          type="button"
+          disabled={appConfig.appUsageDisabled}
           onClick={() => {
+            if (appConfig.appUsageDisabled) return;
             luxandAPIStore.toggleScoringMode();
           }}
           className={[
@@ -214,24 +225,30 @@ export const LocationPickerFab = observer(function LocationPickerFab() {
             luxandAPIStore.useInternalScoring
               ? 'bg-white text-black border-white/80'
               : 'bg-black/70 text-white border-white/40',
+            appConfig.appUsageDisabled ? 'opacity-50 cursor-not-allowed' : '',
           ].join(' ')}
           aria-label="Toggle scoring mode"
-          title={
-            luxandAPIStore.useInternalScoring
-              ? 'Using internal face detector scoring'
-              : 'Using Luxand emotion API scoring'
-          }
+          title={scoringTitle}
         >
           <span>{luxandAPIStore.useInternalScoring ? 'Local score' : 'API score'}</span>
         </button>
 
         <button
+          type="button"
+          disabled={appConfig.appUsageDisabled}
           onClick={() => {
+            if (appConfig.appUsageDisabled) return;
             setQuery('');
             setOpen(true);
           }}
-          className="group flex items-center gap-2 bg-black/80 text-white rounded-full shadow-xl px-4 py-3 hover:bg-black transition border border-white/25"
+          className={[
+            'group flex items-center gap-2 bg-black/80 text-white rounded-full shadow-xl px-4 py-3 border border-white/25',
+            appConfig.appUsageDisabled
+              ? 'opacity-50 cursor-not-allowed'
+              : 'hover:bg-black transition',
+          ].join(' ')}
           aria-label="Open location picker"
+          title={locationTitle}
         >
           <span className="inline-flex items-center justify-center w-7 h-7 rounded-full bg-white/10 font-bold">
             📍
