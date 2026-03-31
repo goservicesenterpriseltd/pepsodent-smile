@@ -11,5 +11,7 @@ export const appConfig = {
     parseNumber(process.env.NEXT_PUBLIC_LEADERBOARD_REFRESH_INTERVAL, 1000)
   ),
   minScore: Math.max(0, parseNumber(process.env.NEXT_PUBLIC_MIN_SCORE, 10)),
+  /** When true, location/scoring FAB and entry to capture are disabled (NEXT_PUBLIC_APP_USAGE_DISABLED). */
+  appUsageDisabled: process.env.NEXT_PUBLIC_APP_USAGE_DISABLED === 'true',
 };
 
